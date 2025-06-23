@@ -1,0 +1,113 @@
+:root {
+  --bg-color: #000000;
+  --nav-bg: #9B06F9;
+  --nav-text: #64F906;
+  --nav-text-hover: #32CDA7;
+  --nav-button-bg: #64F906;
+  --nav-button-text: #ffffff;
+  --nav-button-hover-bg: #32CDA7;
+
+  --heading-color: #414141;
+  --text-color: #000000;
+  --button-bg: #1E90FF;
+  --button-text: #ffffff;
+
+  --font-heading: 'Montserrat', sans-serif;
+  --font-body: 'Karla', sans-serif;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-body);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Headings */
+h1, h2, h3, h4 {
+  color: var(--heading-color);
+  font-family: var(--font-heading);
+  margin: 1rem 0;
+}
+
+/* Navbar */
+nav {
+  background-color: var(--nav-bg);
+  padding: 1rem;
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid #333;
+  width: 100%;
+  max-width: 800px;
+  justify-content: space-between;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+nav a {
+  color: var(--nav-text);
+  text-decoration: none;
+  font-weight: bold;
+}
+nav a:hover {
+  color: var(--nav-text-hover);
+}
+nav button {
+  background-color: var(--nav-button-bg);
+  color: var(--nav-button-text);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+nav button:hover {
+  background-color: var(--nav-button-hover-bg);
+}
+
+/* Form */
+form {
+  background-color: #111;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #333;
+  max-width: 00px;
+  width: 100%;
+}
+
+input, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background-color: #000;
+  color: var(--text-color);
+}
+
+/* Buttons */
+button {
+  background-color: var(--button-bg);
+  color: var(--button-text);
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button:hover {
+  opacity: 0.9;
+}
+
+/* Box-style containers */
+.box {
+  background-color: #111;
+  padding: 1rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  max-width: 600px;
+  width: 100%;
+}
