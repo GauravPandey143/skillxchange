@@ -1,31 +1,54 @@
 import { useEffect, useState } from 'react';
-import { db, auth } from '../firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '../firebase';
+import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function FindSkill() {
   const [skills, setSkills] = useState([]);
   const [search, setSearch] = useState('');
   const [userId, setUserId] = useState(null);
   const [userSkills, setUserSkills] = useState([]);
+  const [userProfiles, setUserProfiles] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Track auth state
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-      }
+      setUserId(user ? user.uid : null);
     });
 
     // Fetch skill posts
     const q = query(collection(db, 'skills'), orderBy('timestamp', 'desc'));
-    const unsubscribeSkills = onSnapshot(q, (snapshot) => {
+    const unsubscribeSkills = onSnapshot(q, async (snapshot) => {
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSkills(results);
 
-      const mine = results.filter(skill => skill.userId === auth.currentUser?.uid);
-      setUserSkills(mine);
+      // Only set userSkills if logged in
+      if (auth.currentUser) {
+        const mine = results.filter(skill => skill.userId === auth.currentUser?.uid);
+        setUserSkills(mine);
+      } else {
+        setUserSkills([]);
+      }
+
+      // Fetch user profiles for all skill posters
+      const uniqueUserIds = [...new Set(results.map(skill => skill.userId).filter(Boolean))];
+      const profiles = {};
+      await Promise.all(
+        uniqueUserIds.map(async (uid) => {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', uid));
+            if (userDoc.exists()) {
+              profiles[uid] = userDoc.data();
+            }
+          } catch (e) {
+            // ignore
+          }
+        })
+      );
+      setUserProfiles(profiles);
     });
 
     return () => {
@@ -39,54 +62,258 @@ function FindSkill() {
     skill.skillWanted?.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Consistent styles with Chat.jsx and OfferSkill.jsx
+  const cardStyle = {
+    maxWidth: 900,
+    margin: '2rem auto',
+    background: '#fff',
+    borderRadius: 18,
+    boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '2rem'
+  };
+
+  const inputStyle = {
+    width: '100%',
+    background: '#f6f8fa',
+    borderRadius: 18,
+    border: '1px solid #dcdcdc',
+    padding: '0.7rem 1rem',
+    fontSize: '1rem',
+    outline: 'none',
+    margin: 'auto',
+    marginBottom: '1.2rem',
+    boxSizing: 'border-box',
+    maxWidth: 500,
+  };
+
+  // Make skillCardStyle match the input area width
+  const skillCardStyle = (isMatch) => ({
+    width: '100%',
+    maxWidth: 500,
+    margin: '0 auto 1.7rem auto',
+    border: isMatch ? '2px solid #1E90FF' : '2px solid #e0e0e0',
+    borderRadius: 18,
+    backgroundColor: isMatch ? '#e6f4ff' : '#fafbfc',
+    boxShadow: isMatch
+      ? '0 2px 8px rgba(30,144,255,0.08)'
+      : '0 2px 8px rgba(0,0,0,0.04)',
+    transition: 'border 0.2s, background 0.2s',
+    padding: 0,
+    overflow: 'hidden',
+    display: 'block',
+    boxSizing: 'border-box'
+  });
+
+  const profileSectionStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '1.2rem 1.2rem 1.2rem 1.2rem',
+    borderBottom: '1px solid #e0e0e0',
+    background: '#f6f8fa'
+  };
+
+  const profilePicStyle = {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    objectFit: 'cover',
+    marginRight: '0.9rem',
+    border: '2px solid #e0e0e0',
+    background: '#eee',
+    verticalAlign: 'middle'
+  };
+
+  const nameStyle = {
+    fontWeight: 700,
+    fontSize: '1.18rem',
+    color: '#1E90FF',
+    textDecoration: 'none'
+  };
+
+  // Modified: Skill section in a single line, capitalized, black, and blue for "Wants"
+  const skillSectionStyle = {
+    padding: '1.3rem 1.2rem 0.7rem 1.2rem',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+  };
+
+  const skillTextStyle = {
+    fontWeight: 700,
+    fontSize: '1.18rem',
+    color: '#222',
+    margin: 0,
+    textTransform: 'capitalize'
+  };
+
+  const wantsTextStyle = {
+    fontWeight: 700,
+    fontSize: '1.18rem',
+    color: '#1E90FF',
+    margin: '0 0.4rem',
+    textTransform: 'capitalize'
+  };
+
+  const dividerStyle = {
+    border: 0,
+    borderTop: '1px solid #e0e0e0',
+    margin: 0
+  };
+
+  const buttonStyle = {
+    background: 'linear-gradient(90deg, #1E90FF 60%, #00C6FB 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 18,
+    padding: '0.7rem 0',
+    fontWeight: 600,
+    fontSize: '1rem',
+    cursor: 'pointer',
+    width: '100%',
+    minWidth: 90,
+    marginTop: '0.7rem',
+    transition: 'background 0.2s'
+  };
+
+  // Handler for messaging when not logged in
+  const handleMessageClick = (e) => {
+    e.preventDefault();
+    alert('You must be logged in to message someone.');
+    navigate('/login');
+  };
+
+  // Handler for profile click when not logged in
+  const handleProfileClick = (e) => {
+    e.preventDefault();
+    alert('You must be logged in to view profiles.');
+    navigate('/login');
+  };
+
+  // Mask email for not logged in users
+  const maskEmail = (email) => {
+    if (!email) return '';
+    const [user, domain] = email.split('@');
+    if (user.length <= 2) return 'xxx@' + (domain || '');
+    return user[0] + 'xxx' + user[user.length - 1] + '@' + (domain || '');
+  };
+
   return (
-    <div style={{ padding: '2rem' }}>
-      <h2>Available Skill Swaps</h2>
+    <div style={cardStyle}>
+      <h2 style={{
+        marginBottom: '1.5rem',
+        fontWeight: 700,
+        fontSize: '1.6rem',
+        color: '#222',
+        textAlign: 'center',
+       letterSpacing: '0.5px'
+      }}>
+        Available Skill Swaps
+      </h2>
 
       <input
         type="text"
         placeholder="Search by skill (e.g. guitar, math)"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        style={{ padding: '0.8rem', marginBottom: '1rem', width: '100%', maxWidth: '325px' }}
+        style={inputStyle}
       />
 
-      {filteredSkills.length === 0 && <p>No matching skills found.</p>}
+      {filteredSkills.length === 0 && <p style={{ color: '#888', textAlign: 'center' }}>No matching skills found.</p>}
 
-      <ul style={{ listStyle: 'none', padding: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0, width: '100%', maxWidth: 500, margin: '0 auto' }}>
         {filteredSkills.map((skill, index) => {
           const isMatch = userSkills.some(mySkill =>
             skill.skillOffered?.toLowerCase() === mySkill.skillWanted?.toLowerCase() &&
             skill.skillWanted?.toLowerCase() === mySkill.skillOffered?.toLowerCase()
           );
+          const userProfile = userProfiles[skill.userId] || {};
+          const displayName = userProfile.name || skill.name || 'User';
+          const photoURL = userProfile.photoURL
+            ? userProfile.photoURL
+            : 'https://ui-avatars.com/api/?name=' +
+              encodeURIComponent(displayName || 'U') +
+              '&background=333&color=fff&rounded=true';
+
+          // Mask contact if not logged in
+          let contactDisplay = skill.contact;
+          if (!userId && contactDisplay) {
+            contactDisplay = maskEmail(contactDisplay);
+          }
 
           return (
             <li
               key={index}
-              style={{
-                marginBottom: '1rem',
-                border: '2px solid #7a8485',
-                padding: '1rem',
-                borderRadius: '8px',
-                backgroundColor: isMatch ? '#e6ffe6' : 'white'
-              }}
+              style={skillCardStyle(isMatch)}
             >
-              <h3>{skill.skillOffered} ➡️ wants {skill.skillWanted}</h3>
-              {isMatch && (
-                <p style={{ color: 'green', fontWeight: 'bold' }}>
-                  🎯 This is a perfect match!
-                </p>
-              )}
-              <p><strong>Name:</strong> {skill.name}</p>
-              <p><strong>Location:</strong> {skill.location}</p>
-              <p><strong>Contact:</strong> {skill.contact}</p>
-              <p><strong>Description:</strong> {skill.description}</p>
-
-              {auth.currentUser?.uid !== skill.userId && (
-                <Link to={`/chat/${[auth.currentUser.uid, skill.userId].sort().join('_')}`}>
-                  <button>Message</button>
-                </Link>
-              )}
+              {/* Profile picture and name at the top, clickable only if logged in */}
+              <div style={profileSectionStyle}>
+                {userId ? (
+                  <Link
+                    to={`/profile/${skill.userId}`}
+                    style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}
+                    title={`View ${displayName}'s profile`}
+                  >
+                    <img
+                      src={photoURL}
+                      alt={displayName}
+                      style={profilePicStyle}
+                    />
+                    <span style={nameStyle}>{displayName}</span>
+                  </Link>
+                ) : (
+                  <a
+                    href="#"
+                    style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', cursor: 'pointer' }}
+                    title="Login required to view profile"
+                    onClick={handleProfileClick}
+                  >
+                    <img
+                      src={photoURL}
+                      alt={displayName}
+                      style={profilePicStyle}
+                    />
+                    <span style={nameStyle}>{displayName}</span>
+                  </a>
+                )}
+              </div>
+              <hr style={dividerStyle} />
+              {/* Skill offered and wanted in a single line, capitalized, black, blue for Wants */}
+              <div style={skillSectionStyle}>
+                <span style={skillTextStyle}>
+                  {skill.skillOffered
+                    ? skill.skillOffered.charAt(0).toUpperCase() + skill.skillOffered.slice(1)
+                    : ''}
+                </span>
+                <span style={wantsTextStyle}>Wants</span>
+                <span style={skillTextStyle}>
+                  {skill.skillWanted
+                    ? skill.skillWanted.charAt(0).toUpperCase() + skill.skillWanted.slice(1)
+                    : ''}
+                </span>
+              </div>
+              {/* Other details */}
+              <div style={{ padding: '0 1.2rem 1.2rem 1.2rem' }}>
+                {isMatch && (
+                  <p style={{ color: '#1E90FF', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                    🎯 This is a perfect match!
+                  </p>
+                )}
+                <p style={{ margin: '0.2rem 0' }}><strong>Location:</strong> {skill.location}</p>
+                <p style={{ margin: '0.2rem 0' }}><strong>Contact:</strong> {contactDisplay}</p>
+                <p style={{ margin: '0.2rem 0' }}><strong>Description:</strong> {skill.description}</p>
+                {/* Only allow messaging if logged in and not your own post */}
+                {userId && userId !== skill.userId ? (
+                  <Link to={`/chat/${[userId, skill.userId].sort().join('_')}`}>
+                    <button style={buttonStyle}>Message</button>
+                  </Link>
+                ) : !userId ? (
+                  <button style={buttonStyle} onClick={handleMessageClick}>
+                    Message
+                  </button>
+                ) : null}
+              </div>
             </li>
           );
         })}

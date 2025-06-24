@@ -1,3 +1,6 @@
+/* Import Poppins font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
 :root {
   --bg-color: #000000;
   --nav-bg: #9B06F9;
@@ -12,8 +15,8 @@
   --button-bg: #1E90FF;
   --button-text: #ffffff;
 
-  --font-heading: 'Montserrat', sans-serif;
-  --font-body: 'Karla', sans-serif;
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Poppins', sans-serif;
 }
 
 body {
@@ -110,4 +113,312 @@ button:hover {
   margin-bottom: 1rem;
   max-width: 600px;
   width: 100%;
+}
+
+/* ===================== Navbar Styles ===================== */
+
+/*
+  .navbar: The main navigation bar, fixed at the top, transparent, with a blur effect and a 2px solid bottom border.
+*/
+.navbar {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+  background: rgba(20, 20, 20, 0.7);
+  color: #fff;
+  border-bottom: 2px solid #333;
+  backdrop-filter: blur(6px);
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/*
+  .navbar-container: Centers the navbar content and constrains its width.
+*/
+.navbar-container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3rem;
+  padding: 0 3rem;
+}
+
+/*
+  .navbar-link: Styles for navigation links (Chats, Offer Skill, Find Skill).
+*/
+.navbar-link {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+.navbar-link:hover {
+  color: #1E90FF;
+  text-underline-offset: 10px;
+}
+
+/*
+  .navbar-btn: Styles for Login, Signup, and Logout buttons in the navbar.
+*/
+.navbar-btn {
+  background: #1E90FF;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 1.2rem;
+  font-weight: 500;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: background 0.2s;
+  cursor: pointer;
+  display: inline-block;
+}
+.navbar-btn:hover {
+  background: #1E90FF;
+  text-decoration: none;
+  color: #fff;
+}
+
+/* ===================== Chat Room Styles ===================== */
+
+/* Main chat container, centers content and adds padding */
+.chat-container {
+  background: #18181b;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+  max-width: 480px;
+  margin: 4rem auto 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 70vh;
+  border: 1.5px solid #23232a;
+}
+
+/* Top bar with profile and attach icon */
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1.5px solid #23232a;
+  background: rgba(24,24,27,0.95);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.chat-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chat-profile-pic {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #333;
+  background: #23232a;
+}
+
+.chat-profile-name {
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.chat-attach-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 0.2rem 0.4rem;
+}
+.chat-attach-btn:hover {
+  color: #1E90FF;
+}
+
+/* Messages area */
+.chat-messages {
+  flex: 1;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  background: #18181b;
+  min-height: 300px;
+}
+
+.chat-empty {
+  color: #888;
+  text-align: center;
+  margin-top: 2rem;
+}
+
+/* Message row and bubbles */
+.chat-message-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 80%;
+}
+.chat-message-me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.chat-message-other {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.chat-message-sender {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-bottom: 0.2rem;
+  font-weight: 500;
+}
+
+.chat-message-bubble {
+  background: #23232a;
+  color: #fff;
+  padding: 0.7rem 1.1rem;
+  border-radius: 1.2rem;
+  font-size: 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  word-break: break-word;
+  max-width: 100%;
+}
+.chat-message-me .chat-message-bubble {
+  background: #1E90FF;
+  color: #fff;
+  border-bottom-right-radius: 0.4rem;
+  border-bottom-left-radius: 1.2rem;
+}
+.chat-message-other .chat-message-bubble {
+  background: #23232a;
+  color: #fff;
+  border-bottom-left-radius: 0.4rem;
+  border-bottom-right-radius: 1.2rem;
+}
+
+/* Input area */
+.chat-input-area {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1rem 1.5rem 1.2rem 1.5rem;
+  border-top: 1.5px solid #23232a;
+  background: rgba(24,24,27,0.98);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  border-radius: 1.2rem;
+  border: 1.5px solid #23232a;
+  background: #23232a;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+}
+.chat-input:focus {
+  border: 1.5px solid #1E90FF;
+}
+
+.chat-send-btn {
+  background: #1E90FF;
+  color: #fff;
+  border: none;
+  border-radius: 1.2rem;
+  padding: 0.7rem 1.4rem;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.chat-send-btn:hover {
+  background: #0056b3;
+}
+
+/* ===================== Offer Skill Styles ===================== */
+
+/* Main container for the offer skill form */
+.offer-container {
+  background: #18181b;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+  max-width: 420px;
+  margin: 4rem auto 0 auto;
+  padding: 2.5rem 2rem 2rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1.5px solid #23232a;
+}
+
+.offer-heading {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  letter-spacing: 0.01em;
+}
+
+.offer-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.offer-input,
+.offer-textarea {
+  background: #23232a;
+  color: #fff;
+  border: 1.5px solid #23232a;
+  border-radius: 1.2rem;
+  padding: 0.9rem 1.1rem;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.offer-input:focus,
+.offer-textarea:focus {
+  border: 1.5px solid #1E90FF;
+}
+
+.offer-textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.offer-btn {
+  background: #1E90FF;
+  color: #fff;
+  border: none;
+  border-radius: 1.2rem;
+  padding: 0.9rem 1.4rem;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 0.5rem;
+}
+.offer-btn:hover {
+  background: #0056b3;
 }
