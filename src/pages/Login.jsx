@@ -15,7 +15,15 @@ function Login() {
       alert('Login successful!');
       navigate('/offer');
     } catch (err) {
-      alert(`Login failed: ${err.message}`);
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-credential'
+      ) {
+        alert('Invalid credentials.');
+      } else {
+        alert(`Login failed: ${err.message}`);
+      }
     }
   };
 

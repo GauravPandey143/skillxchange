@@ -25,6 +25,7 @@ function Chat() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [counterparty, setCounterparty] = useState({ name: 'User', photoURL: '', uid: '' });
+  const [userAvailable, setUserAvailable] = useState(true);
   const currentUser = auth.currentUser;
   const navigate = useNavigate();
 
@@ -51,12 +52,14 @@ function Chat() {
             photoURL: data.photoURL || '',
             uid: counterpartyId
           });
+          setUserAvailable(true);
         } else {
           setCounterparty({
             name: 'User',
             photoURL: '',
             uid: counterpartyId
           });
+          setUserAvailable(false);
         }
       } catch {
         setCounterparty({
@@ -64,6 +67,7 @@ function Chat() {
           photoURL: '',
           uid: counterpartyId
         });
+        setUserAvailable(false);
       }
     }
 
@@ -243,58 +247,73 @@ function Chat() {
         })}
       </div>
 
-      {/* Input Area */}
-      <form
-        onSubmit={sendMessage}
-        autoComplete="off"
-        style={{
-          display: 'flex',
-          borderColor: '#fff',
-          padding: '1rem 1rem',
-          background: '#fff',  
-          gap: '0.5rem'
-        }}
-      >
-        
-        {/* Message Input */}
-        <input
-          type="text"
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          placeholder="Type a message..."
-          required
+      {/* Input Area or User Not Available */}
+      {userAvailable ? (
+        <form
+          onSubmit={sendMessage}
+          autoComplete="off"
           style={{
-            minWidth: '330px',
-            margin: 'auto',
-            border: 'none',
-            outline: 'none',
-            background: '#f6f8fa',
-            borderRadius: 18,
-            border: '1px solid #dcdcdc',
-            padding: '0.7rem 1rem',
-            fontSize: '1rem',
-            marginRight: 0,
-            marginLeft: 0
-          }}
-        />
-        {/* Send Button */}
-        <button
-          type="submit"
-          style={{
-            minWidth: '110px',
-            background: 'linear-gradient(90deg, #1E90FF 60%, #00C6FB 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 18,
-            fontWeight: 400,
-            fontSize: '1rem',
-            cursor: 'pointer',
-            transition: 'background 0.2s'
+            display: 'flex',
+            borderColor: '#fff',
+            padding: '1rem 1rem',
+            background: '#fff',
+            gap: '0.5rem'
           }}
         >
-          Send
-        </button>
-      </form>
+          {/* Message Input */}
+          <input
+            type="text"
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder="Type a message..."
+            required
+            style={{
+              minWidth: '330px',
+              margin: 'auto',
+              border: 'none',
+              outline: 'none',
+              background: '#f6f8fa',
+              borderRadius: 18,
+              border: '1px solid #dcdcdc',
+              padding: '0.7rem 1rem',
+              fontSize: '1rem',
+              marginRight: 0,
+              marginLeft: 0
+            }}
+          />
+          {/* Send Button */}
+          <button
+            type="submit"
+            style={{
+              minWidth: '110px',
+              background: 'linear-gradient(90deg, #1E90FF 60%, #00C6FB 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 18,
+              fontWeight: 400,
+              fontSize: '1rem',
+              cursor: 'pointer',
+              transition: 'background 0.2s'
+            }}
+          >
+            Send
+          </button>
+        </form>
+      ) : (
+        <div
+          style={{
+            padding: '1.5rem',
+            textAlign: 'center',
+            color: '#ff3b3b',
+            fontWeight: 600,
+            fontSize: '1.15rem',
+            background: '#fff',
+            borderTop: '1px solid #ececec'
+          }}
+        >
+          User not available.
+        </div>
+      )}
     </div>
   );
 }

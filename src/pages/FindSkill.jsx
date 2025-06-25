@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,6 +11,9 @@ function FindSkill() {
   const [userId, setUserId] = useState(null);
   const [userSkills, setUserSkills] = useState([]);
   const [userProfiles, setUserProfiles] = useState({});
+  const [deleteModal, setDeleteModal] = useState({ open: false, skillId: null });
+  const [confirmText, setConfirmText] = useState('');
+  const [confirmError, setConfirmError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -177,6 +180,60 @@ function FindSkill() {
     transition: 'background 0.2s'
   };
 
+  const deleteButtonStyle = {
+    background: 'linear-gradient(90deg, #ff3b3b 60%, #ff7b7b 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 18,
+    padding: '0.7rem 0',
+    fontWeight: 600,
+    fontSize: '1rem',
+    cursor: 'pointer',
+    width: '100%',
+    minWidth: 90,
+    marginTop: '0.7rem',
+    transition: 'background 0.2s'
+  };
+
+  const modalOverlayStyle = {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.35)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  };
+
+  const modalBoxStyle = {
+    background: '#fff',
+    borderRadius: 16,
+    padding: '2rem 2.5rem',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+    maxWidth: 350,
+    width: '90%',
+    textAlign: 'center'
+  };
+
+  const modalInputStyle = {
+    width: '300px',
+    background: '#fff',
+    padding: '0.7rem 1rem',
+    borderRadius: 10,
+    border: '1px solid #dcdcdc',
+    margin: '1.2rem 0 1.2rem 0',
+    fontSize: '1rem',
+    outline: 'none'
+  };
+
+  const modalAcceptButtonStyle = {
+    ...deleteButtonStyle,
+    width: 'auto',
+    minWidth: 90,
+    marginTop: 0,
+    padding: '0.7rem 2.5rem'
+  };
+
   // Handler for messaging when not logged in
   const handleMessageClick = (e) => {
     e.preventDefault();
@@ -199,6 +256,23 @@ function FindSkill() {
     return user[0] + 'xxx' + user[user.length - 1] + '@' + (domain || '');
   };
 
+  // Delete skill logic
+  const handleDeleteSkill = async () => {
+    if (confirmText !== 'CONFIRM') {
+      setConfirmError('Please enter the correct text.');
+      return;
+    }
+    if (!deleteModal.skillId) return;
+    try {
+      await deleteDoc(doc(db, 'skills', deleteModal.skillId));
+      setDeleteModal({ open: false, skillId: null });
+      setConfirmText('');
+      setConfirmError('');
+    } catch (e) {
+      alert('Failed to delete skill. Please try again.');
+    }
+  };
+
   return (
     <div style={cardStyle}>
       <h2 style={{
@@ -207,7 +281,7 @@ function FindSkill() {
         fontSize: '1.6rem',
         color: '#222',
         textAlign: 'center',
-       letterSpacing: '0.5px'
+        letterSpacing: '0.5px'
       }}>
         Available Skill Swaps
       </h2>
@@ -241,6 +315,8 @@ function FindSkill() {
           if (!userId && contactDisplay) {
             contactDisplay = maskEmail(contactDisplay);
           }
+
+          const isOwner = userId && userId === skill.userId;
 
           return (
             <li
@@ -304,7 +380,18 @@ function FindSkill() {
                 <p style={{ margin: '0.2rem 0' }}><strong>Contact:</strong> {contactDisplay}</p>
                 <p style={{ margin: '0.2rem 0' }}><strong>Description:</strong> {skill.description}</p>
                 {/* Only allow messaging if logged in and not your own post */}
-                {userId && userId !== skill.userId ? (
+                {isOwner ? (
+                  <button
+                    style={deleteButtonStyle}
+                    onClick={() => {
+                      setDeleteModal({ open: true, skillId: skill.id });
+                      setConfirmText('');
+                      setConfirmError('');
+                    }}
+                  >
+                    Delete
+                  </button>
+                ) : userId && userId !== skill.userId ? (
                   <Link to={`/chat/${[userId, skill.userId].sort().join('_')}`}>
                     <button style={buttonStyle}>Message</button>
                   </Link>
@@ -318,6 +405,57 @@ function FindSkill() {
           );
         })}
       </ul>
+
+      {/* Delete confirmation modal */}
+      {deleteModal.open && (
+        <div style={modalOverlayStyle}>
+          <div style={modalBoxStyle}>
+            <h3 style={{ marginBottom: 16, color: '#ff3b3b' }}>Delete Skill Exchange?</h3>
+            <p style={{ color: '#444', marginBottom: 8 }}>
+              To confirm deletion, type <b>CONFIRM</b> below and click Accept.
+            </p>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={e => {
+                setConfirmText(e.target.value);
+                setConfirmError('');
+              }}
+              style={modalInputStyle}
+              placeholder="Type CONFIRM"
+              autoFocus
+            />
+            {confirmError && (
+              <div style={{ color: '#ff3b3b', marginBottom: 8, fontWeight: 500 }}>
+                {confirmError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                style={modalAcceptButtonStyle}
+                onClick={handleDeleteSkill}
+              >
+                Accept
+              </button>
+              <button
+                style={{
+                  ...modalAcceptButtonStyle,
+                  background: '#eee',
+                  color: '#222',
+                  marginLeft: 0
+                }}
+                onClick={() => {
+                  setDeleteModal({ open: false, skillId: null });
+                  setConfirmText('');
+                  setConfirmError('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { updateEmail } from 'firebase/auth';
 
 // 🔁 Cloudinary uploader
 const uploadToCloudinary = async (file) => {
@@ -20,6 +21,22 @@ const uploadToCloudinary = async (file) => {
   return result.secure_url;
 };
 
+// Simulate OTP sending and verification (for demo only)
+const sendOtpToEmail = async (email) => {
+  // In production, use a backend service to send OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  window.localStorage.setItem('pendingEmail', email);
+  window.localStorage.setItem('pendingOtp', otp);
+  // Simulate sending OTP (show in alert for demo)
+  alert(`OTP sent to ${email}: ${otp}`);
+  return true;
+};
+
+const verifyOtp = (inputOtp) => {
+  const otp = window.localStorage.getItem('pendingOtp');
+  return otp && inputOtp === otp;
+};
+
 function Profile() {
   const { uid } = useParams();
   const [form, setForm] = useState({
@@ -34,6 +51,13 @@ function Profile() {
   const fileInputRef = useRef(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  // Email change states
+  const [showEmailChange, setShowEmailChange] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpInput, setOtpInput] = useState('');
+  const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -126,6 +150,59 @@ function Profile() {
     }
   };
 
+  // Email change logic
+  const handleEmailChangeClick = () => {
+    setShowEmailChange(true);
+    setNewEmail('');
+    setOtpSent(false);
+    setOtpInput('');
+  };
+
+  const handleSendOtp = async () => {
+    if (!newEmail || !/\S+@\S+\.\S+/.test(newEmail)) {
+      alert('Please enter a valid email.');
+      return;
+    }
+    setEmailChangeLoading(true);
+    await sendOtpToEmail(newEmail);
+    setOtpSent(true);
+    setEmailChangeLoading(false);
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpInput) {
+      alert('Please enter the OTP.');
+      return;
+    }
+    if (!verifyOtp(otpInput)) {
+      alert('Invalid OTP.');
+      return;
+    }
+    try {
+      setEmailChangeLoading(true);
+      // Update email in Firebase Auth
+      await updateEmail(auth.currentUser, newEmail);
+      // Update email in Firestore
+      await setDoc(
+        doc(db, 'users', auth.currentUser.uid),
+        { email: newEmail },
+        { merge: true }
+      );
+      setForm(f => ({ ...f, email: newEmail }));
+      setShowEmailChange(false);
+      setOtpSent(false);
+      setOtpInput('');
+      setNewEmail('');
+      alert('Email updated!');
+    } catch (err) {
+      alert('Failed to update email. Please re-login and try again.');
+    } finally {
+      setEmailChangeLoading(false);
+      window.localStorage.removeItem('pendingOtp');
+      window.localStorage.removeItem('pendingEmail');
+    }
+  };
+
   const cardStyle = {
     maxWidth: 900,
     margin: '2rem auto',
@@ -167,6 +244,21 @@ function Profile() {
     cursor: 'pointer',
     marginTop: '0.5rem',
     width: '100%'
+  };
+
+  const changeButtonStyle = {
+    background: 'linear-gradient(90deg, #1E90FF 60%, #00C6FB 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 12,
+    padding: '0.3rem 1.1rem',
+    fontWeight: 600,
+    fontSize: '0.95rem',
+    cursor: 'pointer',
+    marginLeft: 10,
+    marginTop: 0,
+    marginBottom: 0,
+    verticalAlign: 'middle'
   };
 
   if (!auth.currentUser && !uid) {
@@ -242,7 +334,7 @@ function Profile() {
             borderRadius: 18,
             display: 'flex',
             flexDirection: 'column',
-            gap: '1.1rem',
+            gap: '0.5rem',
             width: '100%',
             maxWidth: 400
           }}
@@ -257,16 +349,106 @@ function Profile() {
             required
             disabled={!isOwnProfile}
           />
-          <input
-            style={inputStyle}
-            type="email"
-            name="email"
-            placeholder="Your Email"
-            value={form.email}
-            onChange={handleChange}
-            required
-            disabled
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            <input
+              style={{ ...inputStyle, marginBottom: 0, marginTop: 0, flex: 1 }}
+              type="email"
+              name="email"
+              placeholder="Your Email"
+              value={form.email}
+              onChange={handleChange}
+              required
+              disabled
+            />
+            {isOwnProfile && (
+              <button
+                type="button"
+                style={changeButtonStyle}
+                onClick={handleEmailChangeClick}
+              >
+                Change
+              </button>
+            )}
+          </div>
+          {/* Email change modal/box */}
+          {showEmailChange && (
+            <div
+              style={{
+                background: '#f6f8fa',
+                border: '1px solid #dcdcdc',
+                borderRadius: 12,
+                padding: '1.2rem',
+                margin: '0.7rem 0',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.7rem'
+              }}
+            >
+              {!otpSent ? (
+                <>
+                  <input
+                    style={inputStyle}
+                    type="email"
+                    placeholder="Enter new email"
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    onClick={handleSendOtp}
+                    disabled={emailChangeLoading}
+                  >
+                    {emailChangeLoading ? 'Sending OTP...' : 'Send OTP'}
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      ...buttonStyle,
+                      background: '#eee',
+                      color: '#222',
+                      marginTop: 0
+                    }}
+                    onClick={() => setShowEmailChange(false)}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    placeholder="Enter OTP"
+                    value={otpInput}
+                    onChange={e => setOtpInput(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    onClick={handleVerifyOtp}
+                    disabled={emailChangeLoading}
+                  >
+                    {emailChangeLoading ? 'Verifying...' : 'Verify & Change Email'}
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      ...buttonStyle,
+                      background: '#eee',
+                      color: '#222',
+                      marginTop: 0
+                    }}
+                    onClick={() => setShowEmailChange(false)}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           <input
             style={inputStyle}
             type="text"

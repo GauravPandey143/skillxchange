@@ -202,7 +202,7 @@ function OfferSkill() {
             borderRadius: 18,
             display: 'flex',
             flexDirection: 'column',
-            gap: '1.1rem',
+            gap: '1.2rem',
             width: '100%',
             maxWidth: 400
           }}

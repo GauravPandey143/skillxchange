@@ -24,7 +24,11 @@ function Signup() {
       alert("Signup successful!");
       navigate('/offer');
     } catch (err) {
-      alert(`Signup failed: ${err.message}`);
+      if (err.code === 'auth/email-already-in-use') {
+        alert('Email already is use.');
+      } else {
+        alert(`Signup failed: ${err.message}`);
+      }
     }
   };
 
