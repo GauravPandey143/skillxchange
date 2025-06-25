@@ -11,6 +11,9 @@ import Profile from './pages/Profile';
 import { onAuthStateChanged } from 'firebase/auth';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import TestOTP from './pages/TestOTP';
+
+
 
 function App() {
   // Update lastActive on auth state change and on user activity
@@ -67,6 +70,8 @@ function App() {
         <Route path="/profile/:uid" element={<Profile />} />
         {/* Optional: fallback route */}
         {/* <Route path="*" element={<div style={{ padding: '2rem' }}><h2>Page Not Found</h2></div>} /> */}
+        {/* Test OTP route */}
+        <Route path="/test-otp" element={<TestOTP />} />
       </Routes>
     </Router>
   );

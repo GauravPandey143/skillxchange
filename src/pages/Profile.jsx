@@ -4,6 +4,10 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { updateEmail } from 'firebase/auth';
 
+
+
+
+
 // 🔁 Cloudinary uploader
 const uploadToCloudinary = async (file) => {
   const data = new FormData();
