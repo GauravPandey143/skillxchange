@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'gauravp3512@gmail.com',      // replace with your Gmail
-    pass: 'sssd jrtp ngfq obrl'     // use an App Password, NOT your Gmail password
+    pass: 'sssd jrtp ngfq obrl'         // use an App Password, NOT your Gmail password
   }
 });
 
@@ -33,7 +33,7 @@ exports.sendOtpEmail = functions.https.onCall(async (data, context) => {
 
   // ✅ Send email
   const mailOptions = {
-    from: 'SkillXchange <your.email@gmail.com>',
+    from: 'SkillXchange <gauravp3512@gmail.com>', // use your Gmail here
     to: email,
     subject: 'SkillXchange OTP Verification',
     text: `Your OTP for email change is: ${otp}. It will expire in 5 minutes.`
