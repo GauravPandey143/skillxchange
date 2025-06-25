@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import avatar from '../assets/avatar.svg';
 
 function getCounterpartyId(chatId, currentUserId) {
   // chatId is like 'uid1_uid2', return the other uid
@@ -49,14 +50,14 @@ function Chat() {
           const data = userDoc.data();
           setCounterparty({
             name: data.name || 'User',
-            photoURL: data.photoURL || '',
+            photoURL: data.photoURL && data.photoURL.trim() !== '' ? data.photoURL : avatar,
             uid: counterpartyId
           });
           setUserAvailable(true);
         } else {
           setCounterparty({
             name: 'User',
-            photoURL: '',
+            photoURL: avatar,
             uid: counterpartyId
           });
           setUserAvailable(false);
@@ -64,7 +65,7 @@ function Chat() {
       } catch {
         setCounterparty({
           name: 'User',
-          photoURL: '',
+          photoURL: avatar,
           uid: counterpartyId
         });
         setUserAvailable(false);
@@ -136,13 +137,7 @@ function Chat() {
         title="View Profile"
       >
         <img
-          src={
-            counterparty.photoURL
-              ? counterparty.photoURL
-              : 'https://ui-avatars.com/api/?name=' +
-                encodeURIComponent(counterparty.name || 'U') +
-                '&background=333&color=fff&rounded=true'
-          }
+          src={counterparty.photoURL ? counterparty.photoURL : avatar}
           alt="Profile"
           style={{
             width: 44,

@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, orderBy, doc, getDoc, deleteDoc } from '
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
+import avatar from '../assets/avatar.svg';
 
 function FindSkill() {
   const [skills, setSkills] = useState([]);
@@ -304,11 +305,10 @@ function FindSkill() {
           );
           const userProfile = userProfiles[skill.userId] || {};
           const displayName = userProfile.name || skill.name || 'User';
-          const photoURL = userProfile.photoURL
+          // Use avatar.svg as default if photoURL is empty or falsy
+          const photoURL = userProfile.photoURL && userProfile.photoURL.trim() !== ''
             ? userProfile.photoURL
-            : 'https://ui-avatars.com/api/?name=' +
-              encodeURIComponent(displayName || 'U') +
-              '&background=333&color=fff&rounded=true';
+            : avatar;
 
           // Mask contact if not logged in
           let contactDisplay = skill.contact;

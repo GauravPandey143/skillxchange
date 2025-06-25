@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { collectionGroup, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import avatar from '../assets/avatar.svg';
 
 function isOnline(lastActive) {
   if (!lastActive || !lastActive.seconds) return false;
@@ -58,10 +59,13 @@ function ChatOverview() {
               if (userDoc.exists()) {
                 const data = userDoc.data();
                 displayName = data.name || data.email || displayName;
-                photoURL = data.photoURL || '';
+                photoURL = data.photoURL && data.photoURL.trim() !== '' ? data.photoURL : avatar;
                 lastActive = data.lastActive || null;
+              } else {
+                photoURL = avatar;
               }
             } catch (error) {
+              photoURL = avatar;
               console.warn(`Error fetching user ${otherUid}:`, error);
             }
 
@@ -191,13 +195,7 @@ function ChatOverview() {
               <li key={chatId} style={chatItemStyle}>
                 <Link to={`/profile/${otherUid}`}>
                   <img
-                    src={
-                      photoURL
-                        ? photoURL
-                        : 'https://ui-avatars.com/api/?name=' +
-                          encodeURIComponent(displayName || 'U') +
-                          '&background=333&color=fff&rounded=true'
-                    }
+                    src={photoURL}
                     alt={displayName}
                     style={profilePicStyle}
                     title={displayName}

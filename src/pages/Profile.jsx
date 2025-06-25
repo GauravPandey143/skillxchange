@@ -3,10 +3,7 @@ import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { updateEmail } from 'firebase/auth';
-
-
-
-
+import avatar from '../assets/avatar.svg';
 
 // 🔁 Cloudinary uploader
 const uploadToCloudinary = async (file) => {
@@ -27,13 +24,28 @@ const uploadToCloudinary = async (file) => {
 
 // Simulate OTP sending and verification (for demo only)
 const sendOtpToEmail = async (email) => {
-  // In production, use a backend service to send OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  window.localStorage.setItem('pendingEmail', email);
-  window.localStorage.setItem('pendingOtp', otp);
-  // Simulate sending OTP (show in alert for demo)
-  alert(`OTP sent to ${email}: ${otp}`);
-  return true;
+  try {
+    const res = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+      alert('Failed to send OTP. Please try again.');
+      return false;
+    }
+
+    window.localStorage.setItem('pendingEmail', email);
+    window.localStorage.setItem('pendingOtp', data.otp); // 🔐 Remove later in production
+    alert(`OTP sent to ${email}`);
+    return true;
+  } catch (err) {
+    console.error('Error sending OTP:', err);
+    alert('Error sending OTP. Try again.');
+    return false;
+  }
 };
 
 const verifyOtp = (inputOtp) => {
@@ -168,8 +180,8 @@ function Profile() {
       return;
     }
     setEmailChangeLoading(true);
-    await sendOtpToEmail(newEmail);
-    setOtpSent(true);
+    const sent = await sendOtpToEmail(newEmail);
+    setOtpSent(sent);
     setEmailChangeLoading(false);
   };
 
@@ -234,7 +246,8 @@ function Profile() {
     padding: '0.7rem 1rem',
     fontSize: '1rem',
     outline: 'none',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    margin: 0
   };
 
   const buttonStyle = {
@@ -259,10 +272,24 @@ function Profile() {
     fontWeight: 600,
     fontSize: '0.95rem',
     cursor: 'pointer',
-    marginLeft: 10,
+    marginLeft: 0,
     marginTop: 0,
     marginBottom: 0,
-    verticalAlign: 'middle'
+    verticalAlign: 'middle',
+    position: 'absolute',
+    right: 6,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    height: '70%'
+  };
+
+  // For equidistant spacing between input fields only
+  const inputFieldsWrapper = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem', // even spacing between all input fields
+    width: '100%',
+    margin: '1.5rem 0'
   };
 
   if (!auth.currentUser && !uid) {
@@ -280,18 +307,17 @@ function Profile() {
       ? form.name
       : "Profile";
 
+  // Use avatar.svg as default if photoURL is empty or falsy
+  const profileImageSrc = form.photoURL && form.photoURL.trim() !== ''
+    ? form.photoURL
+    : avatar;
+
   return (
     <div style={cardStyle}>
       <div style={formContainerStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.5rem' }}>
           <img
-            src={
-              form.photoURL
-                ? form.photoURL
-                : 'https://ui-avatars.com/api/?name=' +
-                  encodeURIComponent(form.name || 'U') +
-                  '&background=333&color=fff&rounded=true'
-            }
+            src={profileImageSrc}
             alt="Profile"
             style={{
               width: 100,
@@ -320,7 +346,7 @@ function Profile() {
         </div>
         <h2
           style={{
-            margin: '1rem 0',
+            margin: '0 0 1.5rem 0',
             fontWeight: 700,
             fontSize: '1.6rem',
             color: '#222',
@@ -338,139 +364,148 @@ function Profile() {
             borderRadius: 18,
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
+            alignItems: 'center',
             width: '100%',
-            maxWidth: 400
+            maxWidth: 400,
+            padding: '2rem 1.5rem'
           }}
         >
-          <input
-            style={inputStyle}
-            type="text"
-            name="name"
-            placeholder="Your Name"
-            value={form.name}
-            onChange={handleChange}
-            required
-            disabled={!isOwnProfile}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          <div style={inputFieldsWrapper}>
             <input
-              style={{ ...inputStyle, marginBottom: 0, marginTop: 0, flex: 1 }}
-              type="email"
-              name="email"
-              placeholder="Your Email"
-              value={form.email}
+              style={inputStyle}
+              type="text"
+              name="name"
+              placeholder="Your Name"
+              value={form.name}
               onChange={handleChange}
               required
-              disabled
+              disabled={!isOwnProfile}
             />
-            {isOwnProfile && (
-              <button
-                type="button"
-                style={changeButtonStyle}
-                onClick={handleEmailChangeClick}
-              >
-                Change
-              </button>
-            )}
-          </div>
-          {/* Email change modal/box */}
-          {showEmailChange && (
-            <div
-              style={{
-                background: '#f6f8fa',
-                border: '1px solid #dcdcdc',
-                borderRadius: 12,
-                padding: '1.2rem',
-                margin: '0.7rem 0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.7rem'
-              }}
-            >
-              {!otpSent ? (
-                <>
-                  <input
-                    style={inputStyle}
-                    type="email"
-                    placeholder="Enter new email"
-                    value={newEmail}
-                    onChange={e => setNewEmail(e.target.value)}
-                    required
-                  />
-                  <button
-                    type="button"
-                    style={buttonStyle}
-                    onClick={handleSendOtp}
-                    disabled={emailChangeLoading}
-                  >
-                    {emailChangeLoading ? 'Sending OTP...' : 'Send OTP'}
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      ...buttonStyle,
-                      background: '#eee',
-                      color: '#222',
-                      marginTop: 0
-                    }}
-                    onClick={() => setShowEmailChange(false)}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <input
-                    style={inputStyle}
-                    type="text"
-                    placeholder="Enter OTP"
-                    value={otpInput}
-                    onChange={e => setOtpInput(e.target.value)}
-                    required
-                  />
-                  <button
-                    type="button"
-                    style={buttonStyle}
-                    onClick={handleVerifyOtp}
-                    disabled={emailChangeLoading}
-                  >
-                    {emailChangeLoading ? 'Verifying...' : 'Verify & Change Email'}
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      ...buttonStyle,
-                      background: '#eee',
-                      color: '#222',
-                      marginTop: 0
-                    }}
-                    onClick={() => setShowEmailChange(false)}
-                  >
-                    Cancel
-                  </button>
-                </>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                style={{
+                  ...inputStyle,
+                  marginBottom: 0,
+                  marginTop: 0,
+                  paddingRight: isOwnProfile ? 90 : undefined
+                }}
+                type="email"
+                name="email"
+                placeholder="Your Email"
+                value={form.email}
+                onChange={handleChange}
+                required
+                disabled
+              />
+              {isOwnProfile && (
+                <button
+                  type="button"
+                  style={changeButtonStyle}
+                  onClick={handleEmailChangeClick}
+                  tabIndex={-1}
+                >
+                  Change
+                </button>
               )}
             </div>
-          )}
-          <input
-            style={inputStyle}
-            type="text"
-            name="phone"
-            placeholder="Phone Number"
-            value={form.phone}
-            onChange={handleChange}
-            disabled={!isOwnProfile}
-          />
-          <input
-            style={inputStyle}
-            type="text"
-            name="address"
-            placeholder="Address"
-            value={form.address}
-            onChange={handleChange}
-            disabled={!isOwnProfile}
-          />
+            {/* Email change modal/box */}
+            {showEmailChange && (
+              <div
+                style={{
+                  background: '#f6f8fa',
+                  border: '1px solid #dcdcdc',
+                  borderRadius: 12,
+                  padding: '1.2rem',
+                  margin: '0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.7rem'
+                }}
+              >
+                {!otpSent ? (
+                  <>
+                    <input
+                      style={inputStyle}
+                      type="email"
+                      placeholder="Enter new email"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      onClick={handleSendOtp}
+                      disabled={emailChangeLoading}
+                    >
+                      {emailChangeLoading ? 'Sending OTP...' : 'Send OTP'}
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        ...buttonStyle,
+                        background: '#eee',
+                        color: '#222',
+                        marginTop: 0
+                      }}
+                      onClick={() => setShowEmailChange(false)}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      style={inputStyle}
+                      type="text"
+                      placeholder="Enter OTP"
+                      value={otpInput}
+                      onChange={e => setOtpInput(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      onClick={handleVerifyOtp}
+                      disabled={emailChangeLoading}
+                    >
+                      {emailChangeLoading ? 'Verifying...' : 'Verify & Change Email'}
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        ...buttonStyle,
+                        background: '#eee',
+                        color: '#222',
+                        marginTop: 0
+                      }}
+                      onClick={() => setShowEmailChange(false)}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            <input
+              style={inputStyle}
+              type="text"
+              name="phone"
+              placeholder="Phone Number"
+              value={form.phone}
+              onChange={handleChange}
+              disabled={!isOwnProfile}
+            />
+            <input
+              style={inputStyle}
+              type="text"
+              name="address"
+              placeholder="Address"
+              value={form.address}
+              onChange={handleChange}
+              disabled={!isOwnProfile}
+            />
+          </div>
           {isOwnProfile && (
             <button style={buttonStyle} type="submit" disabled={uploading}>
               {uploading ? 'Saving...' : 'Save Profile'}
@@ -493,13 +528,7 @@ function Profile() {
           }}
         >
           <img
-            src={
-              form.photoURL
-                ? form.photoURL
-                : 'https://ui-avatars.com/api/?name=' +
-                  encodeURIComponent(form.name || 'U') +
-                  '&background=333&color=fff&rounded=true'
-            }
+            src={profileImageSrc}
             alt="Profile Full"
             style={{
               maxWidth: '90vw',
