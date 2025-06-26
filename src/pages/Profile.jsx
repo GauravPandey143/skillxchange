@@ -199,37 +199,23 @@ function Profile() {
     try {
       setEmailChangeLoading(true);
 
-      // If OTP is 000000, skip updateEmail and only update Firestore
-      if (otpInput === '000000') {
-        await setDoc(
-          doc(db, 'users', auth.currentUser.uid),
-          { email: newEmail },
-          { merge: true }
-        );
-        setForm(f => ({ ...f, email: newEmail }));
-        setShowEmailChange(false);
-        setOtpSent(false);
-        setOtpInput('');
-        setNewEmail('');
-        alert('Email updated in database! (dev mode)');
-      } else {
-        // Update email in Firebase Auth
-        await updateEmail(auth.currentUser, newEmail);
-        // Update email in Firestore
-        await setDoc(
-          doc(db, 'users', auth.currentUser.uid),
-          { email: newEmail },
-          { merge: true }
-        );
-        setForm(f => ({ ...f, email: newEmail }));
-        setShowEmailChange(false);
-        setOtpSent(false);
-        setOtpInput('');
-        setNewEmail('');
-        alert('Email updated!');
-      }
+      // Always update Firebase Auth first, even for dev OTP
+      await updateEmail(auth.currentUser, newEmail);
+
+      // Then update Firestore
+      await setDoc(
+        doc(db, 'users', auth.currentUser.uid),
+        { email: newEmail },
+        { merge: true }
+      );
+      setForm(f => ({ ...f, email: newEmail }));
+      setShowEmailChange(false);
+      setOtpSent(false);
+      setOtpInput('');
+      setNewEmail('');
+      alert('Email updated! You can now login with your new email.');
     } catch (err) {
-      alert('Failed to update email. Please re-login and try again.');
+      alert('Failed to update email in authentication. Please re-login and try again.');
     } finally {
       setEmailChangeLoading(false);
       window.localStorage.removeItem('pendingOtp');
