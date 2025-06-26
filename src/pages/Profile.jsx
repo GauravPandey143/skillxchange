@@ -189,6 +189,7 @@ function Profile() {
     setEmailChangeLoading(false);
   };
 
+  // Main OTP verification and email update logic
   const handleVerifyOtp = async () => {
     if (!otpInput) {
       alert('Please enter the OTP.');
@@ -218,6 +219,8 @@ function Profile() {
       // If error is "requires-recent-login", show re-auth form
       if (err.code === 'auth/requires-recent-login') {
         setShowReauth(true);
+      } else if (err.code === 'auth/email-already-in-use') {
+        alert('This email is already in use by another account.');
       } else {
         alert('Failed to update email in authentication. Please re-login and try again.');
       }
@@ -257,7 +260,11 @@ function Profile() {
       setReauthPassword('');
       alert('Email updated! You can now login with your new email.');
     } catch (err) {
-      alert('Re-authentication failed. Please check your password and try again.');
+      if (err.code === 'auth/email-already-in-use') {
+        alert('This email is already in use by another account.');
+      } else {
+        alert('Re-authentication failed. Please check your password and try again.');
+      }
     } finally {
       setEmailChangeLoading(false);
       window.localStorage.removeItem('pendingOtp');
