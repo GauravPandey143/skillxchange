@@ -1,54 +1,31 @@
 import { useState } from 'react';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  updatePassword,
+  signOut
+} from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import GreenTick from '../assets/GreenTick.svg'; // Use your SVG tick (without a circle background)
-
-// Use Resend API route for OTP sending
-const sendOtpToEmail = async (email) => {
-  try {
-    const res = await fetch('/api/send-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      alert('Failed to send OTP. Please try again.');
-      return false;
-    }
-    window.localStorage.setItem('signupPendingEmail', email);
-    window.localStorage.setItem('signupPendingOtp', data.otp); // For dev only
-    alert(`OTP sent to ${email}`);
-    return true;
-  } catch (err) {
-    alert('Error sending OTP. Try again.');
-    return false;
-  }
-};
-
-const verifyOtp = (inputOtp) => {
-  // Accept "000000" as a valid OTP for demo/testing
-  if (inputOtp === '000000') return true;
-  const otp = window.localStorage.getItem('signupPendingOtp');
-  return otp && inputOtp === otp;
-};
+import GreenTick from '../assets/GreenTick.svg';
 
 function Signup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showOtpBox, setShowOtpBox] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
-  const [signupLoading, setSignupLoading] = useState(false);
+  const [showVerifyBox, setShowVerifyBox] = useState(false);
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [signupLoading, setSignupLoading] = useState(false);
   const [signupError, setSignupError] = useState('');
-  const [otpError, setOtpError] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [tempUserCreated, setTempUserCreated] = useState(false);
   const navigate = useNavigate();
 
-  // Consistent styles with Profile.jsx and the rest of the app
+  // Styles
   const cardStyle = {
     maxWidth: 900,
     margin: '2rem auto',
@@ -96,7 +73,7 @@ function Signup() {
     transition: 'background 0.2s'
   };
 
-  const sendOtpButtonStyle = {
+  const verifyButtonStyle = {
     background: 'linear-gradient(90deg, #1E90FF 60%, #00C6FB 100%)',
     color: '#fff',
     border: 'none',
@@ -129,64 +106,98 @@ function Signup() {
     background: 'none'
   };
 
-  const handleShowOtpBox = (e) => {
+  // Step 1: Send verification email (create temp user with random password)
+  const handleShowVerifyBox = async (e) => {
     e.preventDefault();
     setSignupError('');
-    setOtpError('');
+    setVerifyError('');
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
       setSignupError('Please enter a valid email.');
       return;
     }
-    setShowOtpBox(true);
-    setOtpInput('');
+    setShowVerifyBox(true);
     setEmailVerifyLoading(true);
-    sendOtpToEmail(email).then(() => setEmailVerifyLoading(false));
+    setVerificationSent(false);
+    setEmailVerified(false);
+
+    try {
+      // If user already exists, don't create again
+      if (!tempUserCreated) {
+        // Use a random password for temp user creation
+        const tempPass = Math.random().toString(36).slice(-10) + 'A1!';
+        await createUserWithEmailAndPassword(auth, email, tempPass);
+        setTempUserCreated(true);
+      }
+      await sendEmailVerification(auth.currentUser);
+      setVerificationSent(true);
+      setVerifyError('');
+      alert('A verification link has been sent to your email. Please verify your email, then click "Check Verification".');
+    } catch (err) {
+      if (err.code === 'auth/email-already-in-use') {
+        setVerifyError('Email already in use.');
+      } else {
+        setVerifyError('Failed to send verification email.');
+      }
+    }
+    setEmailVerifyLoading(false);
   };
 
-  const handleVerifyOtp = async (e) => {
+  // Step 2: Check if email is verified
+  const handleCheckVerification = async (e) => {
     e.preventDefault();
-    setOtpError('');
-    if (!otpInput) {
-      setOtpError('Please enter the OTP.');
-      return;
+    setVerifyError('');
+    setEmailVerifyLoading(true);
+    try {
+      // Try to sign in with the temp user (should already be signed in)
+      if (auth.currentUser && auth.currentUser.email === email) {
+        await auth.currentUser.reload();
+        if (auth.currentUser.emailVerified) {
+          setEmailVerified(true);
+          setVerifyError('');
+          alert('Email verified! You can now set your password and sign up.');
+        } else {
+          setVerifyError('Email not verified yet. Please check your inbox and click the verification link.');
+        }
+      } else {
+        setVerifyError('Please use the same browser/tab after verifying your email.');
+      }
+    } catch (err) {
+      setVerifyError('Error checking verification. Please try again.');
     }
-    if (!verifyOtp(otpInput)) {
-      setOtpError('Invalid OTP.');
-      return;
-    }
-    setEmailVerified(true);
-    setShowOtpBox(false);
-    setOtpInput('');
-    setOtpError('');
-    alert('Email verified! You can now sign up.');
+    setEmailVerifyLoading(false);
   };
 
+  // Step 3: Complete signup (set password and save user)
   const handleSignup = async (e) => {
     e.preventDefault();
     setSignupError('');
+    if (!name || !email || !password) {
+      setSignupError('Please fill all fields.');
+      return;
+    }
     if (!emailVerified) {
       setSignupError('Please verify your email before signing up.');
       return;
     }
+    if (password.length < 6) {
+      setSignupError('Password must be at least 6 characters.');
+      return;
+    }
     setSignupLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
+      // Set the real password for the user
+      await updatePassword(auth.currentUser, password);
+      await setDoc(doc(db, 'users', auth.currentUser.uid), {
+        uid: auth.currentUser.uid,
         name,
-        email,
+        email: auth.currentUser.email,
         createdAt: serverTimestamp(),
       });
-      alert("Signup successful!");
-      window.localStorage.removeItem('signupPendingEmail');
-      window.localStorage.removeItem('signupPendingOtp');
-      navigate('/offer');
+      alert("Signup successful! Please login.");
+      await signOut(auth);
+      navigate('/login');
     } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
-        setSignupError('Email already in use.');
-      } else {
-        setSignupError(`Signup failed: ${err.message}`);
-      }
+      setSignupError(`Signup failed: ${err.message}`);
     }
     setSignupLoading(false);
   };
@@ -226,6 +237,7 @@ function Signup() {
             onChange={(e) => setName(e.target.value)}
             required
             style={inputStyle}
+            disabled={emailVerified}
           />
           <div style={{ position: 'relative', width: '100%' }}>
             <input
@@ -235,8 +247,10 @@ function Signup() {
               onChange={(e) => {
                 setEmail(e.target.value);
                 setEmailVerified(false);
-                setOtpInput('');
-                setShowOtpBox(false);
+                setShowVerifyBox(false);
+                setVerificationSent(false);
+                setVerifyError('');
+                setTempUserCreated(false);
               }}
               required
               style={{
@@ -248,12 +262,12 @@ function Signup() {
             {!emailVerified && (
               <button
                 type="button"
-                style={sendOtpButtonStyle}
-                onClick={handleShowOtpBox}
+                style={verifyButtonStyle}
+                onClick={handleShowVerifyBox}
                 tabIndex={-1}
                 disabled={emailVerified || emailVerifyLoading}
               >
-                Send OTP
+                Verify
               </button>
             )}
             {emailVerified && (
@@ -262,8 +276,8 @@ function Signup() {
               </span>
             )}
           </div>
-          {/* OTP verification box (like Profile page) */}
-          {showOtpBox && (
+          {/* Email verification box */}
+          {showVerifyBox && !emailVerified && (
             <div
               style={{
                 background: '#f6f8fa',
@@ -276,21 +290,18 @@ function Signup() {
                 gap: '0.7rem'
               }}
             >
-              <input
-                style={inputStyle}
-                type="text"
-                placeholder="Enter OTP"
-                value={otpInput}
-                onChange={e => setOtpInput(e.target.value)}
-                required
-              />
+              <div style={{ color: '#1E90FF', fontWeight: 500, marginBottom: 6 }}>
+                {verificationSent
+                  ? 'A verification link has been sent to your email. Please verify, then click below.'
+                  : 'Sending verification email...'}
+              </div>
               <button
                 type="button"
                 style={buttonStyle}
-                onClick={handleVerifyOtp}
+                onClick={handleCheckVerification}
                 disabled={emailVerifyLoading}
               >
-                {emailVerifyLoading ? 'Verifying...' : 'Verify Email'}
+                {emailVerifyLoading ? 'Checking...' : "Check Verification"}
               </button>
               <button
                 type="button"
@@ -301,17 +312,15 @@ function Signup() {
                   marginTop: 0
                 }}
                 onClick={() => {
-                  setShowOtpBox(false);
-                  setOtpInput('');
-                  setSignupError('');
-                  setOtpError('');
+                  setShowVerifyBox(false);
+                  setVerifyError('');
                 }}
               >
                 Cancel
               </button>
-              {otpError && (
+              {verifyError && (
                 <div style={{ color: '#ff3b3b', fontWeight: 500, marginTop: 6 }}>
-                  {otpError}
+                  {verifyError}
                 </div>
               )}
             </div>
@@ -323,7 +332,7 @@ function Signup() {
             onChange={(e) => setPassword(e.target.value)}
             required
             style={inputStyle}
-            disabled={emailVerified && signupLoading}
+            disabled={!emailVerified}
           />
           <button type="submit" style={buttonStyle} disabled={signupLoading || !emailVerified}>
             {signupLoading ? "Signing Up..." : "Sign Up"}

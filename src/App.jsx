@@ -12,7 +12,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import TestOTP from './pages/TestOTP';
-
+import VerifyEmailChange from './pages/VerifyEmailChange';
 
 
 function App() {
@@ -72,6 +72,7 @@ function App() {
         {/* <Route path="*" element={<div style={{ padding: '2rem' }}><h2>Page Not Found</h2></div>} /> */}
         {/* Test OTP route */}
         <Route path="/test-otp" element={<TestOTP />} />
+        <Route path="/verify-email-change" element={<VerifyEmailChange />} />
       </Routes>
     </Router>
   );

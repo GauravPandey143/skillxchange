@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import avatar from '../assets/avatar.svg';
+import { verifyBeforeUpdateEmail, fetchSignInMethodsForEmail } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // 🔁 Cloudinary uploader
 const uploadToCloudinary = async (file) => {
@@ -20,39 +21,6 @@ const uploadToCloudinary = async (file) => {
   const result = await res.json();
   if (!result.secure_url) throw new Error('Upload failed');
   return result.secure_url;
-};
-
-// Simulate OTP sending and verification (for demo only)
-const sendOtpToEmail = async (email) => {
-  try {
-    const res = await fetch('/api/send-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    const data = await res.json();
-    if (!data.success) {
-      alert('Failed to send OTP. Please try again.');
-      return false;
-    }
-
-    window.localStorage.setItem('pendingEmail', email);
-    window.localStorage.setItem('pendingOtp', data.otp); // 🔐 Remove later in production
-    alert(`OTP sent to ${email}`);
-    return true;
-  } catch (err) {
-    console.error('Error sending OTP:', err);
-    alert('Error sending OTP. Try again.');
-    return false;
-  }
-};
-
-// Accept "000000" as valid OTP for demo/testing
-const verifyOtp = (inputOtp) => {
-  if (inputOtp === '000000') return true;
-  const otp = window.localStorage.getItem('pendingOtp');
-  return otp && inputOtp === otp;
 };
 
 function Profile() {
@@ -73,12 +41,29 @@ function Profile() {
   // Email change states
   const [showEmailChange, setShowEmailChange] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
-  const [reauthPassword, setReauthPassword] = useState('');
-  const [showReauth, setShowReauth] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState('');
 
+  // Keep track of logged-in user for own profile detection
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      // If viewing own profile, update email in form when it changes
+      if (user && (!uid || uid === user.uid)) {
+        setForm(f => ({
+          ...f,
+          email: user.email || ''
+        }));
+      }
+    });
+    return unsubscribe;
+  }, [uid]);
+
+  // Fetch profile data
   useEffect(() => {
     const fetchProfile = async () => {
       const userId = uid || (auth.currentUser && auth.currentUser.uid);
@@ -90,7 +75,10 @@ function Profile() {
         const data = userSnap.data();
         setForm({
           name: data.name || '',
-          email: data.email || '',
+          // Show Firestore email for others, auth.currentUser.email for own profile
+          email: (!uid || (auth.currentUser && uid === auth.currentUser.uid))
+            ? (auth.currentUser?.email || data.email || '')
+            : (data.email || ''),
           phone: data.phone || '',
           address: data.address || '',
           photoURL: data.photoURL || ''
@@ -103,7 +91,8 @@ function Profile() {
       }
     };
     fetchProfile();
-  }, [uid]);
+    // eslint-disable-next-line
+  }, [uid, currentUser]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -170,118 +159,57 @@ function Profile() {
     }
   };
 
-  // Email change logic
+  // Email change logic (Firebase official flow)
   const handleEmailChangeClick = () => {
     setShowEmailChange(true);
     setNewEmail('');
-    setOtpSent(false);
-    setOtpInput('');
+    setPendingEmail('');
+    setEmailChangeError('');
   };
 
-  const handleSendOtp = async () => {
+  // Use Firebase's verifyBeforeUpdateEmail, but check if email is already in use in both Auth and Firestore
+  const handleSendVerifyLink = async () => {
+    setEmailChangeError('');
     if (!newEmail || !/\S+@\S+\.\S+/.test(newEmail)) {
-      alert('Please enter a valid email.');
+      setEmailChangeError('Please enter a valid email.');
       return;
     }
     setEmailChangeLoading(true);
-    const sent = await sendOtpToEmail(newEmail);
-    setOtpSent(sent);
+    try {
+      // Check if email is already in use in Firebase Auth
+      const methods = await fetchSignInMethodsForEmail(auth, newEmail);
+      if (methods && methods.length > 0) {
+        setEmailChangeError('Email already in use.');
+        setEmailChangeLoading(false);
+        return;
+      }
+      // Check if email is already in use in Firestore (users collection)
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', newEmail));
+      const querySnapshot = await getDocs(q);
+      // If found and not the current user, block
+      if (!querySnapshot.empty) {
+        let alreadyUsed = false;
+        querySnapshot.forEach(docSnap => {
+          if (docSnap.id !== auth.currentUser.uid) {
+            alreadyUsed = true;
+          }
+        });
+        if (alreadyUsed) {
+          setEmailChangeError('Email already in use.');
+          setEmailChangeLoading(false);
+          return;
+        }
+      }
+      await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
+      setPendingEmail(newEmail);
+      setEmailChangeError('');
+      alert('A verification link has been sent to your new email. Please check your inbox and click the link to complete the change.');
+    } catch (err) {
+      setEmailChangeError('Error sending verification link: ' + (err.message || ''));
+      console.error(err);
+    }
     setEmailChangeLoading(false);
-  };
-
-  // Main OTP verification and email update logic
-  const handleVerifyOtp = async () => {
-    if (!otpInput) {
-      alert('Please enter the OTP.');
-      return;
-    }
-    if (!verifyOtp(otpInput)) {
-      alert('Invalid OTP.');
-      return;
-    }
-    try {
-      setEmailChangeLoading(true);
-
-      // Always update Firebase Auth first, then Firestore, for both dev and prod OTPs
-      await updateEmail(auth.currentUser, newEmail);
-      await setDoc(
-        doc(db, 'users', auth.currentUser.uid),
-        { email: newEmail },
-        { merge: true }
-      );
-      setForm(f => ({ ...f, email: newEmail }));
-      setShowEmailChange(false);
-      setOtpSent(false);
-      setOtpInput('');
-      setNewEmail('');
-      alert('Email updated! You can now login with your new email.');
-    } catch (err) {
-      // Debug log for all errors
-      console.error('Email update error:', err, err.code, err.message);
-      // If error is "requires-recent-login", show re-auth form
-      if (err.code === 'auth/requires-recent-login') {
-        setShowReauth(true);
-      } else if (err.code === 'auth/email-already-in-use') {
-        alert('This email is already in use by another account.');
-      } else {
-        alert(
-          'Failed to update email in authentication. Please re-login and try again.\n\n' +
-          'Error code: ' + err.code + '\n' +
-          'Message: ' + err.message
-        );
-      }
-    } finally {
-      setEmailChangeLoading(false);
-      window.localStorage.removeItem('pendingOtp');
-      window.localStorage.removeItem('pendingEmail');
-    }
-  };
-
-  // Re-authenticate and retry email update
-  const handleReauth = async () => {
-    if (!reauthPassword) {
-      alert('Please enter your password to re-authenticate.');
-      return;
-    }
-    try {
-      setEmailChangeLoading(true);
-      const credential = EmailAuthProvider.credential(
-        auth.currentUser.email,
-        reauthPassword
-      );
-      await reauthenticateWithCredential(auth.currentUser, credential);
-      // After re-auth, try updateEmail again
-      await updateEmail(auth.currentUser, newEmail);
-      await setDoc(
-        doc(db, 'users', auth.currentUser.uid),
-        { email: newEmail },
-        { merge: true }
-      );
-      setForm(f => ({ ...f, email: newEmail }));
-      setShowEmailChange(false);
-      setOtpSent(false);
-      setOtpInput('');
-      setNewEmail('');
-      setShowReauth(false);
-      setReauthPassword('');
-      alert('Email updated! You can now login with your new email.');
-    } catch (err) {
-      // Debug log for all errors
-      console.error('Re-authentication error:', err, err.code, err.message);
-      if (err.code === 'auth/email-already-in-use') {
-        alert('This email is already in use by another account.');
-      } else {
-        alert(
-          'Re-authentication failed. Please check your password and try again.\n\n' +
-          'Error code: ' + err.code + '\n' +
-          'Message: ' + err.message
-        );
-      }
-    } finally {
-      setEmailChangeLoading(false);
-      window.localStorage.removeItem('pendingOtp');
-      window.localStorage.removeItem('pendingEmail');
-    }
   };
 
   const cardStyle = {
@@ -356,7 +284,7 @@ function Profile() {
     margin: '1.5rem 0'
   };
 
-  if (!auth.currentUser && !uid) {
+  if (!currentUser && !uid) {
     return (
       <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '1.2rem', color: '#888' }}>
         Please log in to view profiles.
@@ -484,87 +412,46 @@ function Profile() {
                   gap: '0.7rem'
                 }}
               >
-                {!otpSent ? (
-                  <>
-                    <input
-                      style={inputStyle}
-                      type="email"
-                      placeholder="Enter new email"
-                      value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      style={buttonStyle}
-                      onClick={handleSendOtp}
-                      disabled={emailChangeLoading}
-                    >
-                      {emailChangeLoading ? 'Sending OTP...' : 'Send OTP'}
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        ...buttonStyle,
-                        background: '#eee',
-                        color: '#222',
-                        marginTop: 0
-                      }}
-                      onClick={() => setShowEmailChange(false)}
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      style={inputStyle}
-                      type="text"
-                      placeholder="Enter OTP"
-                      value={otpInput}
-                      onChange={e => setOtpInput(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      style={buttonStyle}
-                      onClick={handleVerifyOtp}
-                      disabled={emailChangeLoading}
-                    >
-                      {emailChangeLoading ? 'Verifying...' : 'Verify & Change Email'}
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        ...buttonStyle,
-                        background: '#eee',
-                        color: '#222',
-                        marginTop: 0
-                      }}
-                      onClick={() => setShowEmailChange(false)}
-                    >
-                      Cancel
-                    </button>
-                  </>
+                <input
+                  style={inputStyle}
+                  type="email"
+                  placeholder="Enter new email"
+                  value={newEmail}
+                  onChange={e => {
+                    setNewEmail(e.target.value);
+                    setEmailChangeError('');
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  style={buttonStyle}
+                  onClick={handleSendVerifyLink}
+                  disabled={emailChangeLoading}
+                >
+                  {emailChangeLoading ? 'Sending...' : 'Send Verification Link'}
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...buttonStyle,
+                    background: '#eee',
+                    color: '#222',
+                    marginTop: 0
+                  }}
+                  onClick={() => setShowEmailChange(false)}
+                >
+                  Cancel
+                </button>
+                {emailChangeError && (
+                  <div style={{ marginTop: 10, color: '#d32f2f', fontWeight: 500 }}>
+                    {emailChangeError}
+                  </div>
                 )}
-                {/* Re-auth modal */}
-                {showReauth && (
-                  <div style={{ marginTop: 12 }}>
-                    <input
-                      style={inputStyle}
-                      type="password"
-                      placeholder="Enter your password to confirm"
-                      value={reauthPassword}
-                      onChange={e => setReauthPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      style={buttonStyle}
-                      onClick={handleReauth}
-                      disabled={emailChangeLoading}
-                    >
-                      {emailChangeLoading ? 'Re-authenticating...' : 'Confirm & Change Email'}
-                    </button>
+                {pendingEmail && (
+                  <div style={{ marginTop: 10, color: '#0070f3' }}>
+                    A verification link has been sent to {pendingEmail}.<br />
+                    Please check your email and click the link to complete the change.
                   </div>
                 )}
               </div>

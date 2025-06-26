@@ -66,7 +66,7 @@ function FindSkill() {
     skill.skillWanted?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Consistent styles with Chat.jsx and OfferSkill.jsx
+  // Consistent styles
   const cardStyle = {
     maxWidth: 900,
     margin: '2rem auto',
@@ -92,7 +92,6 @@ function FindSkill() {
     maxWidth: 500,
   };
 
-  // Make skillCardStyle match the input area width
   const skillCardStyle = (isMatch) => ({
     width: '100%',
     maxWidth: 500,
@@ -136,7 +135,6 @@ function FindSkill() {
     textDecoration: 'none'
   };
 
-  // Modified: Skill section in a single line, capitalized, black, and blue for "Wants"
   const skillSectionStyle = {
     padding: '1.3rem 1.2rem 0.7rem 1.2rem',
     display: 'flex',
@@ -304,14 +302,13 @@ function FindSkill() {
             skill.skillWanted?.toLowerCase() === mySkill.skillOffered?.toLowerCase()
           );
           const userProfile = userProfiles[skill.userId] || {};
-          const displayName = userProfile.name || skill.name || 'User';
-          // Use avatar.svg as default if photoURL is empty or falsy
+          const displayName = userProfile.name || 'User';
           const photoURL = userProfile.photoURL && userProfile.photoURL.trim() !== ''
             ? userProfile.photoURL
             : avatar;
 
-          // Mask contact if not logged in
-          let contactDisplay = skill.contact;
+          // Always use latest email from Firestore profile
+          let contactDisplay = userProfile.email || '';
           if (!userId && contactDisplay) {
             contactDisplay = maskEmail(contactDisplay);
           }
