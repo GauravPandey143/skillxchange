@@ -48,7 +48,9 @@ const sendOtpToEmail = async (email) => {
   }
 };
 
+// Accept "000000" as valid OTP for demo/testing
 const verifyOtp = (inputOtp) => {
+  if (inputOtp === '000000') return true;
   const otp = window.localStorage.getItem('pendingOtp');
   return otp && inputOtp === otp;
 };
@@ -283,7 +285,6 @@ function Profile() {
     height: '70%'
   };
 
-  // For equidistant spacing between input fields only
   const inputFieldsWrapper = {
     display: 'flex',
     flexDirection: 'column',
