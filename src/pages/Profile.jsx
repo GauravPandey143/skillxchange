@@ -1,12 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import avatar from '../assets/avatar.svg';
-import { verifyBeforeUpdateEmail, fetchSignInMethodsForEmail } from 'firebase/auth';
-import { onAuthStateChanged } from 'firebase/auth';
+import { verifyBeforeUpdateEmail, fetchSignInMethodsForEmail, onAuthStateChanged } from 'firebase/auth';
 
-// 🔁 Cloudinary uploader
+// Cloudinary uploader
 const uploadToCloudinary = async (file) => {
   const data = new FormData();
   data.append('file', file);
@@ -25,6 +24,7 @@ const uploadToCloudinary = async (file) => {
 
 function Profile() {
   const { uid } = useParams();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -44,15 +44,18 @@ function Profile() {
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [emailChangeError, setEmailChangeError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [checkVerificationLoading, setCheckVerificationLoading] = useState(false);
 
-  // Keep track of logged-in user for own profile detection
+  // Auth state
   const [currentUser, setCurrentUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      // If viewing own profile, update email in form when it changes
+      setAuthChecked(true);
       if (user && (!uid || uid === user.uid)) {
         setForm(f => ({
           ...f,
@@ -62,6 +65,13 @@ function Profile() {
     });
     return unsubscribe;
   }, [uid]);
+
+  // Redirect to login only after auth check is complete
+  useEffect(() => {
+    if (authChecked && !currentUser && !uid) {
+      navigate('/login');
+    }
+  }, [authChecked, currentUser, uid, navigate]);
 
   // Fetch profile data
   useEffect(() => {
@@ -75,7 +85,6 @@ function Profile() {
         const data = userSnap.data();
         setForm({
           name: data.name || '',
-          // Show Firestore email for others, auth.currentUser.email for own profile
           email: (!uid || (auth.currentUser && uid === auth.currentUser.uid))
             ? (auth.currentUser?.email || data.email || '')
             : (data.email || ''),
@@ -159,30 +168,29 @@ function Profile() {
     }
   };
 
-  // Email change logic (Firebase official flow)
+  // Email change logic
   const handleEmailChangeClick = () => {
     setShowEmailChange(true);
     setNewEmail('');
     setPendingEmail('');
     setEmailChangeError('');
+    setVerificationSent(false);
   };
 
-  // Use Firebase's verifyBeforeUpdateEmail, but check if email is already in use in both Auth and Firestore
+  // Send verification link, but check if email is already in use in both Auth and Firestore
   const handleSendVerifyLink = async () => {
     setEmailChangeError('');
     if (!newEmail || !/\S+@\S+\.\S+/.test(newEmail)) {
       setEmailChangeError('Please enter a valid email.');
       return;
     }
+    // Check if new email is same as current email
+    if (newEmail.trim().toLowerCase() === (form.email || '').trim().toLowerCase()) {
+      setEmailChangeError('Email already in use.');
+      return;
+    }
     setEmailChangeLoading(true);
     try {
-      // Check if email is already in use in Firebase Auth
-      const methods = await fetchSignInMethodsForEmail(auth, newEmail);
-      if (methods && methods.length > 0) {
-        setEmailChangeError('Email already in use.');
-        setEmailChangeLoading(false);
-        return;
-      }
       // Check if email is already in use in Firestore (users collection)
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', newEmail));
@@ -201,15 +209,49 @@ function Profile() {
           return;
         }
       }
+      // Check if email is already in use in Firebase Auth
+      const methods = await fetchSignInMethodsForEmail(auth, newEmail);
+      if (methods && methods.length > 0) {
+        setEmailChangeError('Email already in use.');
+        setEmailChangeLoading(false);
+        return;
+      }
       await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
       setPendingEmail(newEmail);
+      setVerificationSent(true);
       setEmailChangeError('');
-      alert('A verification link has been sent to your new email. Please check your inbox and click the link to complete the change.');
     } catch (err) {
-      setEmailChangeError('Error sending verification link: ' + (err.message || ''));
+      // User-friendly message for requires-recent-login
+      if (
+        err.code === 'auth/requires-recent-login' ||
+        (err.message && err.message.toLowerCase().includes('requires-recent-login'))
+      ) {
+        setEmailChangeError('Please logout and login to change your email.');
+      } else {
+        setEmailChangeError('Error sending verification link.');
+      }
       console.error(err);
     }
     setEmailChangeLoading(false);
+  };
+
+  // Only logout and redirect if verification is complete, else show error
+  const handleCheckVerification = async () => {
+    setEmailChangeError('');
+    setCheckVerificationLoading(true);
+    try {
+      await auth.currentUser.reload();
+      if (auth.currentUser.email === newEmail && auth.currentUser.emailVerified) {
+        await auth.signOut();
+        navigate('/login');
+        return;
+      } else {
+        setEmailChangeError('Email Verification Incomplete.');
+      }
+    } catch (err) {
+      setEmailChangeError('Error checking verification. Please try again.');
+    }
+    setCheckVerificationLoading(false);
   };
 
   const cardStyle = {
@@ -283,14 +325,6 @@ function Profile() {
     width: '100%',
     margin: '1.5rem 0'
   };
-
-  if (!currentUser && !uid) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '1.2rem', color: '#888' }}>
-        Please log in to view profiles.
-      </div>
-    );
-  }
 
   const profileHeading = isOwnProfile
     ? "My Profile"
@@ -422,15 +456,27 @@ function Profile() {
                     setEmailChangeError('');
                   }}
                   required
+                  disabled={verificationSent}
                 />
-                <button
-                  type="button"
-                  style={buttonStyle}
-                  onClick={handleSendVerifyLink}
-                  disabled={emailChangeLoading}
-                >
-                  {emailChangeLoading ? 'Sending...' : 'Send Verification Link'}
-                </button>
+                {!verificationSent ? (
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    onClick={handleSendVerifyLink}
+                    disabled={emailChangeLoading}
+                  >
+                    {emailChangeLoading ? 'Sending...' : 'Send Verification Link'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    style={buttonStyle}
+                    onClick={handleCheckVerification}
+                    disabled={checkVerificationLoading}
+                  >
+                    {checkVerificationLoading ? 'Checking...' : 'Check Verification'}
+                  </button>
+                )}
                 <button
                   type="button"
                   style={{
@@ -440,18 +486,19 @@ function Profile() {
                     marginTop: 0
                   }}
                   onClick={() => setShowEmailChange(false)}
+                  disabled={emailChangeLoading || checkVerificationLoading}
                 >
                   Cancel
                 </button>
                 {emailChangeError && (
-                  <div style={{ marginTop: 10, color: '#d32f2f', fontWeight: 500 }}>
+                  <div style={{ marginTop: 10, color: '#d32f2f', fontWeight: 500}}>
                     {emailChangeError}
                   </div>
                 )}
                 {pendingEmail && (
                   <div style={{ marginTop: 10, color: '#0070f3' }}>
                     A verification link has been sent to {pendingEmail}.<br />
-                    Please check your email and click the link to complete the change.
+                    After verifying smash that Check Verification button.
                   </div>
                 )}
               </div>
