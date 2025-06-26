@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { updateEmail } from 'firebase/auth';
+import { updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import avatar from '../assets/avatar.svg';
 
 // 🔁 Cloudinary uploader
@@ -76,6 +76,8 @@ function Profile() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [showReauth, setShowReauth] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -199,10 +201,8 @@ function Profile() {
     try {
       setEmailChangeLoading(true);
 
-      // Always update Firebase Auth first, even for dev OTP
+      // Always update Firebase Auth first, then Firestore, for both dev and prod OTPs
       await updateEmail(auth.currentUser, newEmail);
-
-      // Then update Firestore
       await setDoc(
         doc(db, 'users', auth.currentUser.uid),
         { email: newEmail },
@@ -215,7 +215,49 @@ function Profile() {
       setNewEmail('');
       alert('Email updated! You can now login with your new email.');
     } catch (err) {
-      alert('Failed to update email in authentication. Please re-login and try again.');
+      // If error is "requires-recent-login", show re-auth form
+      if (err.code === 'auth/requires-recent-login') {
+        setShowReauth(true);
+      } else {
+        alert('Failed to update email in authentication. Please re-login and try again.');
+      }
+    } finally {
+      setEmailChangeLoading(false);
+      window.localStorage.removeItem('pendingOtp');
+      window.localStorage.removeItem('pendingEmail');
+    }
+  };
+
+  // Re-authenticate and retry email update
+  const handleReauth = async () => {
+    if (!reauthPassword) {
+      alert('Please enter your password to re-authenticate.');
+      return;
+    }
+    try {
+      setEmailChangeLoading(true);
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email,
+        reauthPassword
+      );
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      // After re-auth, try updateEmail again
+      await updateEmail(auth.currentUser, newEmail);
+      await setDoc(
+        doc(db, 'users', auth.currentUser.uid),
+        { email: newEmail },
+        { merge: true }
+      );
+      setForm(f => ({ ...f, email: newEmail }));
+      setShowEmailChange(false);
+      setOtpSent(false);
+      setOtpInput('');
+      setNewEmail('');
+      setShowReauth(false);
+      setReauthPassword('');
+      alert('Email updated! You can now login with your new email.');
+    } catch (err) {
+      alert('Re-authentication failed. Please check your password and try again.');
     } finally {
       setEmailChangeLoading(false);
       window.localStorage.removeItem('pendingOtp');
@@ -485,6 +527,26 @@ function Profile() {
                       Cancel
                     </button>
                   </>
+                )}
+                {/* Re-auth modal */}
+                {showReauth && (
+                  <div style={{ marginTop: 12 }}>
+                    <input
+                      style={inputStyle}
+                      type="password"
+                      placeholder="Enter your password to confirm"
+                      value={reauthPassword}
+                      onChange={e => setReauthPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      onClick={handleReauth}
+                      disabled={emailChangeLoading}
+                    >
+                      {emailChangeLoading ? 'Re-authenticating...' : 'Confirm & Change Email'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
