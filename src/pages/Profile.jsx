@@ -198,20 +198,36 @@ function Profile() {
     }
     try {
       setEmailChangeLoading(true);
-      // Update email in Firebase Auth
-      await updateEmail(auth.currentUser, newEmail);
-      // Update email in Firestore
-      await setDoc(
-        doc(db, 'users', auth.currentUser.uid),
-        { email: newEmail },
-        { merge: true }
-      );
-      setForm(f => ({ ...f, email: newEmail }));
-      setShowEmailChange(false);
-      setOtpSent(false);
-      setOtpInput('');
-      setNewEmail('');
-      alert('Email updated!');
+
+      // If OTP is 000000, skip updateEmail and only update Firestore
+      if (otpInput === '000000') {
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid),
+          { email: newEmail },
+          { merge: true }
+        );
+        setForm(f => ({ ...f, email: newEmail }));
+        setShowEmailChange(false);
+        setOtpSent(false);
+        setOtpInput('');
+        setNewEmail('');
+        alert('Email updated in database! (dev mode)');
+      } else {
+        // Update email in Firebase Auth
+        await updateEmail(auth.currentUser, newEmail);
+        // Update email in Firestore
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid),
+          { email: newEmail },
+          { merge: true }
+        );
+        setForm(f => ({ ...f, email: newEmail }));
+        setShowEmailChange(false);
+        setOtpSent(false);
+        setOtpInput('');
+        setNewEmail('');
+        alert('Email updated!');
+      }
     } catch (err) {
       alert('Failed to update email. Please re-login and try again.');
     } finally {
@@ -288,7 +304,7 @@ function Profile() {
   const inputFieldsWrapper = {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1.5rem', // even spacing between all input fields
+    gap: '1.5rem',
     width: '100%',
     margin: '1.5rem 0'
   };
@@ -301,14 +317,12 @@ function Profile() {
     );
   }
 
-  // Determine the heading: "My Profile" for own profile, otherwise show user's name
   const profileHeading = isOwnProfile
     ? "My Profile"
     : form.name
       ? form.name
       : "Profile";
 
-  // Use avatar.svg as default if photoURL is empty or falsy
   const profileImageSrc = form.photoURL && form.photoURL.trim() !== ''
     ? form.photoURL
     : avatar;
