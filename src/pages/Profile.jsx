@@ -216,13 +216,19 @@ function Profile() {
       setNewEmail('');
       alert('Email updated! You can now login with your new email.');
     } catch (err) {
+      // Debug log for all errors
+      console.error('Email update error:', err, err.code, err.message);
       // If error is "requires-recent-login", show re-auth form
       if (err.code === 'auth/requires-recent-login') {
         setShowReauth(true);
       } else if (err.code === 'auth/email-already-in-use') {
         alert('This email is already in use by another account.');
       } else {
-        alert('Failed to update email in authentication. Please re-login and try again.');
+        alert(
+          'Failed to update email in authentication. Please re-login and try again.\n\n' +
+          'Error code: ' + err.code + '\n' +
+          'Message: ' + err.message
+        );
       }
     } finally {
       setEmailChangeLoading(false);
@@ -260,10 +266,16 @@ function Profile() {
       setReauthPassword('');
       alert('Email updated! You can now login with your new email.');
     } catch (err) {
+      // Debug log for all errors
+      console.error('Re-authentication error:', err, err.code, err.message);
       if (err.code === 'auth/email-already-in-use') {
         alert('This email is already in use by another account.');
       } else {
-        alert('Re-authentication failed. Please check your password and try again.');
+        alert(
+          'Re-authentication failed. Please check your password and try again.\n\n' +
+          'Error code: ' + err.code + '\n' +
+          'Message: ' + err.message
+        );
       }
     } finally {
       setEmailChangeLoading(false);
