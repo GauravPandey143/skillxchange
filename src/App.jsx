@@ -73,6 +73,7 @@ function App() {
         {/* Test OTP route */}
         <Route path="/test-otp" element={<TestOTP />} />
         <Route path="/verify-email-change" element={<VerifyEmailChange />} />
+        <Route path="/offer-skill/:id" element={<OfferSkill />} />
       </Routes>
     </Router>
   );

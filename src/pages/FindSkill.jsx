@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
@@ -27,15 +27,6 @@ function FindSkill() {
     const q = query(collection(db, 'skills'), orderBy('timestamp', 'desc'));
     const unsubscribeSkills = onSnapshot(q, async (snapshot) => {
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSkills(results);
-
-      // Only set userSkills if logged in
-      if (auth.currentUser) {
-        const mine = results.filter(skill => skill.userId === auth.currentUser?.uid);
-        setUserSkills(mine);
-      } else {
-        setUserSkills([]);
-      }
 
       // Fetch user profiles for all skill posters
       const uniqueUserIds = [...new Set(results.map(skill => skill.userId).filter(Boolean))];
@@ -53,6 +44,18 @@ function FindSkill() {
         })
       );
       setUserProfiles(profiles);
+
+      // Only set userSkills if logged in and user still exists
+      if (auth.currentUser && profiles[auth.currentUser.uid]) {
+        const mine = results.filter(skill => skill.userId === auth.currentUser?.uid);
+        setUserSkills(mine);
+      } else {
+        setUserSkills([]);
+      }
+
+      // Filter out skills whose user profile does not exist (deleted users)
+      const filtered = results.filter(skill => profiles[skill.userId]);
+      setSkills(filtered);
     });
 
     return () => {
@@ -65,6 +68,12 @@ function FindSkill() {
     skill.skillOffered?.toLowerCase().includes(search.toLowerCase()) ||
     skill.skillWanted?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Available: not completed
+  const availableSkills = filteredSkills.filter(skill => !skill.completed);
+
+  // Completed: completed
+  const completedSkills = filteredSkills.filter(skill => skill.completed);
 
   // Consistent styles
   const cardStyle = {
@@ -114,7 +123,8 @@ function FindSkill() {
     alignItems: 'center',
     padding: '1.2rem 1.2rem 1.2rem 1.2rem',
     borderBottom: '1px solid #e0e0e0',
-    background: '#f6f8fa'
+    background: '#f6f8fa',
+    position: 'relative'
   };
 
   const profilePicStyle = {
@@ -135,11 +145,24 @@ function FindSkill() {
     textDecoration: 'none'
   };
 
+  const iconButtonStyle = {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    marginLeft: 16,
+    fontSize: 26,
+    padding: 0,
+    outline: 'none',
+    display: 'flex',
+    alignItems: 'center'
+  };
+
   const skillSectionStyle = {
     padding: '1.3rem 1.2rem 0.7rem 1.2rem',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative'
   };
 
   const skillTextStyle = {
@@ -272,6 +295,186 @@ function FindSkill() {
     }
   };
 
+  // Mark skill as completed
+  const handleCompleteSkill = async (skillId) => {
+    try {
+      await updateDoc(doc(db, 'skills', skillId), { completed: true });
+    } catch (e) {
+      alert('Failed to mark as completed.');
+    }
+  };
+
+  // Mark skill as available again
+  const handleRepeatSkill = async (skillId) => {
+    try {
+      await updateDoc(doc(db, 'skills', skillId), { completed: false });
+    } catch (e) {
+      alert('Failed to repeat skill.');
+    }
+  };
+
+  // Render skill card (for both available and completed)
+  const renderSkillCard = (skill, isCompleted = false) => {
+    const isMatch = userSkills.some(mySkill =>
+      skill.skillOffered?.toLowerCase() === mySkill.skillWanted?.toLowerCase() &&
+      skill.skillWanted?.toLowerCase() === mySkill.skillOffered?.toLowerCase()
+    );
+    const userProfile = userProfiles[skill.userId] || {};
+    const displayName = userProfile.name || 'User';
+    const photoURL = userProfile.photoURL && userProfile.photoURL.trim() !== ''
+      ? userProfile.photoURL
+      : avatar;
+
+    let contactDisplay = userProfile.email || '';
+    if (!userId && contactDisplay) {
+      contactDisplay = maskEmail(contactDisplay);
+    }
+
+    const isOwner = userId && userId === skill.userId;
+
+    return (
+      <li
+        key={skill.id}
+        style={skillCardStyle(isMatch)}
+      >
+        {/* Complete/Repeat/Delete icons for owner */}
+        <div style={profileSectionStyle}>
+          {isOwner && (
+            <div style={{ display: 'flex', alignItems: 'center', position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }}>
+              {!isCompleted ? (
+                <>
+                  <span
+                    title="Mark as completed"
+                    style={{ ...iconButtonStyle, color: '#2ecc40' }}
+                    onClick={() => handleCompleteSkill(skill.id)}
+                  >
+                    {/* Green tick SVG */}
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                      <circle cx="14" cy="14" r="14" fill="#2ecc40"/>
+                      <path d="M8 14.5L13 19L20 11.5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  <span
+                    title="Delete"
+                    style={{ ...iconButtonStyle, color: '#ff3b3b' }}
+                    onClick={() => {
+                      setDeleteModal({ open: true, skillId: skill.id });
+                      setConfirmText('');
+                      setConfirmError('');
+                    }}
+                  >
+                    {/* Red cross SVG */}
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                      <circle cx="14" cy="14" r="14" fill="#ff3b3b"/>
+                      <path d="M9 9L19 19M19 9L9 19" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+                    </svg>
+                  </span>
+                </>
+              ) : (
+                <span
+                  title="Repeat"
+                  style={{ ...iconButtonStyle, color: '#1E90FF' }}
+                  onClick={() => handleRepeatSkill(skill.id)}
+                >
+                  {/* Repeat SVG */}
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <circle cx="14" cy="14" r="14" fill="#1E90FF"/>
+                    <path d="M9 14c0-2.95 2.39-5.34 5.34-5.34 2.22 0 4.12 1.36 4.94 3.34M19 9v3.34h-3.34" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+              )}
+            </div>
+          )}
+          {userId ? (
+            <Link
+              to={`/profile/${skill.userId}`}
+              style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}
+              title={`View ${displayName}'s profile`}
+            >
+              <img
+                src={photoURL}
+                alt={displayName}
+                style={profilePicStyle}
+              />
+              <span style={nameStyle}>{displayName}</span>
+            </Link>
+          ) : (
+            <a
+              href="#"
+              style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', cursor: 'pointer' }}
+              title="Login required to view profile"
+              onClick={handleProfileClick}
+            >
+              <img
+                src={photoURL}
+                alt={displayName}
+                style={profilePicStyle}
+              />
+              <span style={nameStyle}>{displayName}</span>
+            </a>
+          )}
+        </div>
+        <hr style={dividerStyle} />
+        {/* Skill offered and wanted in a single line, capitalized, black, blue for Wants, and edit icon after */}
+        <div style={skillSectionStyle}>
+          <span style={skillTextStyle}>
+            {skill.skillOffered
+              ? skill.skillOffered.charAt(0).toUpperCase() + skill.skillOffered.slice(1)
+              : ''}
+          </span>
+          <span style={wantsTextStyle}>Wants</span>
+          <span style={skillTextStyle}>
+            {skill.skillWanted
+              ? skill.skillWanted.charAt(0).toUpperCase() + skill.skillWanted.slice(1)
+              : ''}
+          </span>
+          {/* Edit icon for owner, after the skill line, only if not completed */}
+          {isOwner && !isCompleted && (
+            <span
+              title="Edit"
+              style={{ ...iconButtonStyle, color: '#1E90FF', marginLeft: 12 }}
+              onClick={() => navigate(`/offer-skill/${skill.id}`)}
+            >
+              {/* Edit SVG */}
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                <circle cx="14" cy="14" r="14" fill="#1E90FF"/>
+                <path d="M18.9 9.1L19.9 10.1C20.3 10.5 20.3 11.1 19.9 11.5L12.5 18.9C12.3 19.1 12.1 19.2 11.8 19.2H10V17.4C10 17.1 10.1 16.9 10.3 16.7L17.7 9.3C18.1 8.9 18.7 8.9 18.9 9.1Z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          )}
+        </div>
+        {/* Other details */}
+        <div style={{ padding: '0 1.2rem 1.2rem 1.2rem' }}>
+          {isMatch && !isCompleted && (
+            <p style={{ color: '#1E90FF', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+              🎯 This is a perfect match!
+            </p>
+          )}
+          <p style={{ margin: '0.2rem 0' }}><strong>Location:</strong> {skill.location}</p>
+          <p style={{ margin: '0.2rem 0' }}><strong>Contact:</strong> {contactDisplay}</p>
+          <p style={{ margin: '0.2rem 0' }}><strong>Description:</strong> {skill.description}</p>
+          {/* Only allow messaging if logged in and not your own post and not completed */}
+          {!isCompleted && (
+            isOwner ? null : userId && userId !== skill.userId ? (
+              <Link to={`/chat/${[userId, skill.userId].sort().join('_')}`}>
+                <button style={buttonStyle}>Message</button>
+              </Link>
+            ) : !userId ? (
+              <button style={buttonStyle} onClick={handleMessageClick}>
+                Message
+              </button>
+            ) : null
+          )}
+          {isCompleted && (
+            <div style={{ color: '#2ecc40', fontWeight: 500, marginTop: 8 }}>
+              This skill swap has been marked as completed.
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  };
+
   return (
     <div style={cardStyle}>
       <h2 style={{
@@ -293,114 +496,28 @@ function FindSkill() {
         style={inputStyle}
       />
 
-      {filteredSkills.length === 0 && <p style={{ color: '#888', textAlign: 'center' }}>No matching skills found.</p>}
+      {availableSkills.length === 0 && <p style={{ color: '#888', textAlign: 'center' }}>No matching skills found.</p>}
 
       <ul style={{ listStyle: 'none', padding: 0, width: '100%', maxWidth: 500, margin: '0 auto' }}>
-        {filteredSkills.map((skill, index) => {
-          const isMatch = userSkills.some(mySkill =>
-            skill.skillOffered?.toLowerCase() === mySkill.skillWanted?.toLowerCase() &&
-            skill.skillWanted?.toLowerCase() === mySkill.skillOffered?.toLowerCase()
-          );
-          const userProfile = userProfiles[skill.userId] || {};
-          const displayName = userProfile.name || 'User';
-          const photoURL = userProfile.photoURL && userProfile.photoURL.trim() !== ''
-            ? userProfile.photoURL
-            : avatar;
+        {availableSkills.map(skill => renderSkillCard(skill, false))}
+      </ul>
 
-          // Always use latest email from Firestore profile
-          let contactDisplay = userProfile.email || '';
-          if (!userId && contactDisplay) {
-            contactDisplay = maskEmail(contactDisplay);
-          }
+      {/* Completed Skill Swaps Section */}
+      <h2 style={{
+        margin: '2.5rem 0 1.5rem 0',
+        fontWeight: 700,
+        fontSize: '1.6rem',
+        color: '#2ecc40',
+        textAlign: 'center',
+        letterSpacing: '0.5px'
+      }}>
+        Completed Skill Swaps
+      </h2>
 
-          const isOwner = userId && userId === skill.userId;
+      {completedSkills.length === 0 && <p style={{ color: '#bbb', textAlign: 'center' }}>No completed skills.</p>}
 
-          return (
-            <li
-              key={index}
-              style={skillCardStyle(isMatch)}
-            >
-              {/* Profile picture and name at the top, clickable only if logged in */}
-              <div style={profileSectionStyle}>
-                {userId ? (
-                  <Link
-                    to={`/profile/${skill.userId}`}
-                    style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}
-                    title={`View ${displayName}'s profile`}
-                  >
-                    <img
-                      src={photoURL}
-                      alt={displayName}
-                      style={profilePicStyle}
-                    />
-                    <span style={nameStyle}>{displayName}</span>
-                  </Link>
-                ) : (
-                  <a
-                    href="#"
-                    style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', cursor: 'pointer' }}
-                    title="Login required to view profile"
-                    onClick={handleProfileClick}
-                  >
-                    <img
-                      src={photoURL}
-                      alt={displayName}
-                      style={profilePicStyle}
-                    />
-                    <span style={nameStyle}>{displayName}</span>
-                  </a>
-                )}
-              </div>
-              <hr style={dividerStyle} />
-              {/* Skill offered and wanted in a single line, capitalized, black, blue for Wants */}
-              <div style={skillSectionStyle}>
-                <span style={skillTextStyle}>
-                  {skill.skillOffered
-                    ? skill.skillOffered.charAt(0).toUpperCase() + skill.skillOffered.slice(1)
-                    : ''}
-                </span>
-                <span style={wantsTextStyle}>Wants</span>
-                <span style={skillTextStyle}>
-                  {skill.skillWanted
-                    ? skill.skillWanted.charAt(0).toUpperCase() + skill.skillWanted.slice(1)
-                    : ''}
-                </span>
-              </div>
-              {/* Other details */}
-              <div style={{ padding: '0 1.2rem 1.2rem 1.2rem' }}>
-                {isMatch && (
-                  <p style={{ color: '#1E90FF', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                    🎯 This is a perfect match!
-                  </p>
-                )}
-                <p style={{ margin: '0.2rem 0' }}><strong>Location:</strong> {skill.location}</p>
-                <p style={{ margin: '0.2rem 0' }}><strong>Contact:</strong> {contactDisplay}</p>
-                <p style={{ margin: '0.2rem 0' }}><strong>Description:</strong> {skill.description}</p>
-                {/* Only allow messaging if logged in and not your own post */}
-                {isOwner ? (
-                  <button
-                    style={deleteButtonStyle}
-                    onClick={() => {
-                      setDeleteModal({ open: true, skillId: skill.id });
-                      setConfirmText('');
-                      setConfirmError('');
-                    }}
-                  >
-                    Delete
-                  </button>
-                ) : userId && userId !== skill.userId ? (
-                  <Link to={`/chat/${[userId, skill.userId].sort().join('_')}`}>
-                    <button style={buttonStyle}>Message</button>
-                  </Link>
-                ) : !userId ? (
-                  <button style={buttonStyle} onClick={handleMessageClick}>
-                    Message
-                  </button>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
+      <ul style={{ listStyle: 'none', padding: 0, width: '100%', maxWidth: 500, margin: '0 auto' }}>
+        {completedSkills.map(skill => renderSkillCard(skill, true))}
       </ul>
 
       {/* Delete confirmation modal */}

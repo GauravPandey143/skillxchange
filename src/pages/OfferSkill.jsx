@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 function OfferSkill() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',
     skillOffered: '',
@@ -12,43 +14,54 @@ function OfferSkill() {
     contact: '',
     description: ''
   });
-  const [profilePic, setProfilePic] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [loadingSkill, setLoadingSkill] = useState(!!id);
 
-  // Prefill name and email from user profile
+  // Prefill name and email from user profile, and load skill if editing
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndSkill = async () => {
       if (auth.currentUser) {
         const userRef = doc(db, 'users', auth.currentUser.uid);
         const userSnap = await getDoc(userRef);
-        setForm(f => ({
-          ...f,
-          name: userSnap.exists() ? userSnap.data().name || '' : '',
-          contact: auth.currentUser.email || ''
-        }));
+        let name = '';
+        let contact = auth.currentUser.email || '';
+        if (userSnap.exists()) {
+          name = userSnap.data().name || '';
+        }
+        if (id) {
+          // Editing: fetch skill data
+          const skillRef = doc(db, 'skills', id);
+          const skillSnap = await getDoc(skillRef);
+          if (skillSnap.exists() && skillSnap.data().userId === auth.currentUser.uid) {
+            const skillData = skillSnap.data();
+            setForm({
+              name: name,
+              skillOffered: skillData.skillOffered || '',
+              skillWanted: skillData.skillWanted || '',
+              location: skillData.location || '',
+              contact: contact,
+              description: skillData.description || ''
+            });
+          } else {
+            alert('Skill not found or you do not have permission to edit this skill.');
+            navigate('/');
+          }
+          setLoadingSkill(false);
+        } else {
+          setForm(f => ({
+            ...f,
+            name,
+            contact
+          }));
+        }
       }
     };
-    fetchUser();
-  }, []);
+    fetchUserAndSkill();
+    // eslint-disable-next-line
+  }, [id, auth.currentUser]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleProfilePicChange = (e) => {
-    const file = e.target.files[0];
-    if (
-      file &&
-      (file.type === 'image/jpeg' ||
-        file.type === 'image/png' ||
-        file.type === 'image/jpg')
-    ) {
-      setProfilePic(file);
-    } else {
-      alert('Please select a JPG, JPEG, or PNG image.');
-      e.target.value = '';
-      setProfilePic(null);
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -61,42 +74,18 @@ function OfferSkill() {
 
     setUploading(true);
 
-    let photoURL = '';
-
     try {
-      // 🔒 Save name and photoURL in /users if not already stored
+      // 🔒 Save name in /users if not already stored
       const userRef = doc(db, 'users', auth.currentUser.uid);
       const userSnap = await getDoc(userRef);
-
-      // If a profile picture is selected, upload it to Firebase Storage
-      if (profilePic) {
-        const storage = getStorage();
-        const storageRef = ref(
-          storage,
-          `profilePictures/${auth.currentUser.uid}.${profilePic.name.split('.').pop()}`
-        );
-        await uploadBytes(storageRef, profilePic);
-        photoURL = await getDownloadURL(storageRef);
-      } else if (userSnap.exists()) {
-        // If user already exists, keep their existing photoURL if available
-        photoURL = userSnap.data().photoURL || '';
-      }
 
       if (!userSnap.exists()) {
         await setDoc(userRef, {
           uid: auth.currentUser.uid,
           name: form.name,
           email: auth.currentUser.email,
-          photoURL,
           createdAt: serverTimestamp(),
         });
-      } else if (photoURL) {
-        // Update photoURL if a new one was uploaded
-        await setDoc(
-          userRef,
-          { photoURL, name: form.name },
-          { merge: true }
-        );
       } else if (form.name && userSnap.data().name !== form.name) {
         // Update name if changed
         await setDoc(
@@ -106,14 +95,27 @@ function OfferSkill() {
         );
       }
 
-      // 📝 Save skill data
-      await addDoc(collection(db, 'skills'), {
-        ...form,
-        userId: auth.currentUser.uid,
-        timestamp: serverTimestamp()
-      });
-
-      alert('Skill posted successfully!');
+      // 📝 Save or update skill data
+      if (id) {
+        // Editing existing skill
+        const skillRef = doc(db, 'skills', id);
+        await updateDoc(skillRef, {
+          skillOffered: form.skillOffered,
+          skillWanted: form.skillWanted,
+          location: form.location,
+          description: form.description,
+          // Do not update userId, timestamp, or contact
+        });
+        alert('Skill updated successfully!');
+      } else {
+        // Creating new skill
+        await addDoc(collection(db, 'skills'), {
+          ...form,
+          userId: auth.currentUser.uid,
+          timestamp: serverTimestamp()
+        });
+        alert('Skill posted successfully!');
+      }
 
       setForm({
         name: form.name,
@@ -123,9 +125,9 @@ function OfferSkill() {
         contact: form.contact,
         description: ''
       });
-      setProfilePic(null);
+      if (id) navigate('/'); // Go back to main page after editing
     } catch (error) {
-      console.error('Error adding skill:', error);
+      console.error('Error adding/updating skill:', error);
       alert('Something went wrong while posting your skill.');
     } finally {
       setUploading(false);
@@ -179,6 +181,18 @@ function OfferSkill() {
     transition: 'background 0.2s'
   };
 
+  if (loadingSkill) {
+    return (
+      <div style={cardStyle}>
+        <div style={formContainerStyle}>
+          <h2 style={{ marginBottom: '1.5rem', fontWeight: 700, fontSize: '1.6rem', color: '#222', textAlign: 'center', letterSpacing: '0.5px' }}>
+            Loading...
+          </h2>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={cardStyle}>
       <div style={formContainerStyle}>
@@ -192,7 +206,7 @@ function OfferSkill() {
             letterSpacing: '0.5px'
           }}
         >
-          Offer a Skill
+          {id ? 'Edit Skill Offer' : 'Offer a Skill'}
         </h2>
         <form
           onSubmit={handleSubmit}
@@ -265,7 +279,7 @@ function OfferSkill() {
             type="submit"
             disabled={uploading}
           >
-            {uploading ? 'Submitting...' : 'Submit Skill Offer'}
+            {uploading ? (id ? 'Updating...' : 'Submitting...') : (id ? 'Update Skill Offer' : 'Submit Skill Offer')}
           </button>
         </form>
       </div>
