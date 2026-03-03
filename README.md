@@ -1,12 +1,29 @@
-# React + Vite
+SkillXChange
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SkillXChange is a minimal real-time skill exchange web app where users can connect and chat to swap skills directly. The idea is simple — instead of paying money, users exchange knowledge.
 
-Currently, two official plugins are available:
+This project was built as a learning-based implementation to explore real-time systems, authentication, and frontend-backend integration.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Tech Stack
 
-## Expanding the ESLint configuration
+React (Vite)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Firebase Authentication (Email/Password)
+
+Firebase Realtime Database
+
+Vercel (Deployment)
+
+Purpose
+
+This was developed as a project to understand:
+
+Real-time data synchronization
+
+User authentication flows
+
+Cloud database integration
+
+Full frontend deployment pipeline
+
+The project is currently complete in its core functionality and is not under active development.
