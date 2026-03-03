@@ -1,29 +1,26 @@
-SkillXChange
+# SkillXChange
 
-SkillXChange is a minimal real-time skill exchange web app where users can connect and chat to swap skills directly. The idea is simple — instead of paying money, users exchange knowledge.
+SkillXChange is a minimal real-time skill exchange web application where users can connect and chat to swap skills directly. Instead of paying money, users exchange knowledge with each other.
 
-This project was built as a learning-based implementation to explore real-time systems, authentication, and frontend-backend integration.
+This project was developed as a learning-focused implementation to explore real-time systems, authentication, and frontend-backend integration.
 
-Tech Stack
+## 🛠 Tech Stack
 
-React (Vite)
+- **Frontend:** React (Vite)  
+- **Authentication:** Firebase Authentication (Email/Password)  
+- **Database:** Firebase Realtime Database  
+- **Deployment:** Vercel  
 
-Firebase Authentication (Email/Password)
+## 🎯 Purpose
 
-Firebase Realtime Database
+This project was built to gain practical experience with:
 
-Vercel (Deployment)
+- Real-time data synchronization  
+- User authentication flows  
+- Cloud database integration  
+- Frontend deployment workflows  
 
-Purpose
+The core functionality is complete, and the project is not under active development.
 
-This was developed as a project to understand:
-
-Real-time data synchronization
-
-User authentication flows
-
-Cloud database integration
-
-Full frontend deployment pipeline
-
-The project is currently complete in its core functionality and is not under active development.
+## Here is The Screenshot of the Website:
+<img width="1222" height="566" alt="image" src="https://github.com/user-attachments/assets/2f5fab1d-d4ba-4276-a0d1-6fcac157aa80" />
